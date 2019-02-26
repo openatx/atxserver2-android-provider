@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "adbkit": "^2.11.0",
+    "commander": "^2.19.0"
+  }
+}
