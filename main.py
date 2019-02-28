@@ -2,6 +2,7 @@
 # coding: utf-8
 #
 
+import argparse
 import json
 import os
 import pprint
@@ -41,6 +42,7 @@ def current_ip():
 
 class ServerConnection(object):
     def __init__(self, server_addr="localhost:4000"):
+        server_addr = '192.168.0.110:4000'
         self._server_addr = server_addr
         self._ws = None
 
@@ -50,7 +52,8 @@ class ServerConnection(object):
 
     async def connect(self):
         """ 需要实现自动重连的逻辑 """
-        ws = self._ws = await websocket.websocket_connect("ws://" + self._server_addr + "/websocket/heartbeat")
+        ws = self._ws = await websocket.websocket_connect(
+            "ws://" + self._server_addr + "/websocket/heartbeat")
         ws.__class__ = SafeWebSocket
 
         await ws.write_message({
@@ -73,11 +76,8 @@ class ServerConnection(object):
         return await self._ws.write_message(message)
 
     async def device_update(self, data: dict):
-        # data = {}
         data['command'] = 'update'
-        # data['udid'] = udid
-        # data['properties'] = prop_data
-        # data['changes'] = changes
+        data['platform'] = 'android'
 
         await self.write_message(data)
 
@@ -157,46 +157,6 @@ class AndroidWorker(object):
             p.terminate()
 
 
-providers = {}
-
-
-class WebSocketError(Exception):
-    """ websocket connection exception """
-
-
-async def watch_devices():
-    async for event in adb.track_devices():
-        print(event)
-        raise WebSocketError("dev")
-
-
-async def watch_websocket():
-    await gen.sleep(1)
-    print("Done")
-    raise WebSocketError("manual")
-
-
-async def run():
-    server = await ServerConnection().connect()
-    devices = await adb.devices()
-    for d in devices:
-        logger.info("%s", d)
-        if d.status != "device":
-            continue
-        w = AndroidWorker(d.serial)
-
-        await server.came_online("abcdefg", w.atx_address(), {
-            "udid": "abcdefg",
-            "private": False,
-            "properties": w.properties(),
-        })
-        w.wait()
-        # gen.with_timeout(10, server.read_message)
-        server.healthcheck()
-
-        # p.wait()
-
-
 # async def main():
 #     try:
 #         await run()
@@ -206,8 +166,8 @@ async def run():
 #             p.close()
 
 
-async def _main():
-    server = await ServerConnection().connect()
+async def _main(server_addr: str = ''):
+    server = await ServerConnection(server_addr).connect()
 
     udids = {}
     async for event in adb.track_devices():
@@ -247,6 +207,11 @@ async def test_asyncadb():
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '-s', '--server', default='localhost:4000', help='server address')
+    args = parser.parse_args()
+
     # IOLoop.current().run_sync(test_asyncadb)
     IOLoop.current().run_sync(_main)
     # IOLoop.current().run_sync(watch_all)
