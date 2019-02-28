@@ -62,6 +62,8 @@ class ServerConnection(object):
 
         msg = await ws.read_message()
         logger.info("read websocket: %s", msg)
+
+        # read message until EOF
         return self
 
     async def write_message(self, message: dict):
@@ -70,16 +72,14 @@ class ServerConnection(object):
 
         return await self._ws.write_message(message)
 
-    async def device_update(self, udid: str, data: dict):
-        data["platform"] = "android"
-        data["udid"] = udid
-        address = data.pop("address", None)
+    async def device_update(self, data: dict):
+        # data = {}
+        data['command'] = 'update'
+        # data['udid'] = udid
+        # data['properties'] = prop_data
+        # data['changes'] = changes
 
-        await self.write_message({
-            "command": "update",
-            "address": address,  # atx-agent listen address
-            "data": data
-        })
+        await self.write_message(data)
 
     async def came_online(self, udid: str, data: dict):
         data["platform"] = "android"
@@ -134,6 +134,9 @@ class AndroidWorker(object):
 
     def atx_address(self):
         return self._current_ip + ":" + str(self._atx_proxy_port)
+
+    def remote_address(self):
+        return self._current_ip + ":" + str(self._adb_remote_port)
 
     async def properties(self):
         brand = await adb.shell(self._serial, "getprop ro.product.brand")
@@ -214,25 +217,24 @@ async def _main():
             try:
                 worker = AndroidWorker(event.serial)
                 udid = udids[event.serial] = event.serial
-                await server.device_update(udid, {
+                await server.device_update({
+                    # "private": False, # TODO
+                    "udid": udid,
+                    "platform": "android",
                     "present": True,
-                    "private": False,
-                    "address": worker.atx_address(),
+                    "provider": {
+                        "deviceAddress": worker.atx_address(),
+                        "remoteConnectAddress": worker.remote_address(),
+                    },
                     "properties": await worker.properties(),
                 })
             except RuntimeError:
                 logger.warning("device:%s initialize failed", event.serial)
         else:
             udid = udids[event.serial]
-            await server.device_update(udid, {
+            await server.device_update({
+                "udid": udid,
                 "present": False,
-                "private": False,
-                "address": worker.atx_address(),
-                "properties": {
-                    "serial": event.serial,
-                    "brand": 'XiaoMi',
-                    "version": "7.0.1",
-                }
             })
         logger.info("initial finished %s", event.serial)
 
