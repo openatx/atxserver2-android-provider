@@ -42,7 +42,6 @@ def current_ip():
 
 class ServerConnection(object):
     def __init__(self, server_addr="localhost:4000"):
-        server_addr = '192.168.0.110:4000'
         self._server_addr = server_addr
         self._ws = None
 
@@ -114,17 +113,9 @@ class AndroidWorker(object):
         """
         do forward and start proxy
         """
-        port = self._adb_forward_port = freeport.get()
-        logger.info("adb foward tcp:%d -> tcp:7912", port)
-        subprocess.call(['adb', 'forward', 'tcp:{}'.format(port), 'tcp:7912'])
-
-        port = self._atx_proxy_port = freeport.get()
-        logger.info("tcpproxy.js start *:%d -> %d",
-                    port, self._adb_forward_port)
-        p1 = subprocess.Popen(
-            ['node', 'tcpproxy.js',
-             str(self._atx_proxy_port), 'localhost', str(self._adb_forward_port)])
-        self._procs.append(p1)
+        logger.info("forward atx-agent")
+        self._atx_proxy_port = self.proxy_device_port(7912)
+        self._whatsinput_port = self.proxy_device_port(6677)
 
         port = self._adb_remote_port = freeport.get()
         logger.info("adbkit start, port %d", port)
@@ -132,11 +123,31 @@ class AndroidWorker(object):
             os.path.abspath('node_modules/.bin/adbkit'), 'usb-device-to-tcp', '-p', str(self._adb_remote_port), self._serial])
         self._procs.append(p2)
 
-    def atx_address(self):
-        return self._current_ip + ":" + str(self._atx_proxy_port)
+    def addrs(self):
+        def port2addr(port):
+            return self._current_ip + ":"+str(port)
 
-    def remote_address(self):
-        return self._current_ip + ":" + str(self._adb_remote_port)
+        return {
+            "deviceAddress": port2addr(self._atx_proxy_port),
+            "remoteConnectAddress": port2addr(self._adb_remote_port),
+            "whatsinputAddress": port2addr(self._whatsinput_port),
+        }
+
+    def proxy_device_port(self, device_port: int) -> int:
+        """ reverse-proxy device:port to *:port """
+        local_port = freeport.get()
+        logger.info("adb foward tcp:%d -> tcp:%d", local_port, device_port)
+        subprocess.call(['adb', 'forward', 'tcp:{}'.format(
+            local_port), 'tcp:{}'.format(device_port)])
+
+        listen_port = freeport.get()
+        logger.info("tcpproxy.js start *:%d -> %d",
+                    listen_port, local_port)
+        p = subprocess.Popen(
+            ['node', 'tcpproxy.js',
+             str(listen_port), 'localhost', str(local_port)])
+        self._procs.append(p)
+        return listen_port
 
     async def properties(self):
         brand = await adb.shell(self._serial, "getprop ro.product.brand")
@@ -182,10 +193,7 @@ async def _main(server_addr: str = ''):
                     "udid": udid,
                     "platform": "android",
                     "present": True,
-                    "provider": {
-                        "deviceAddress": worker.atx_address(),
-                        "remoteConnectAddress": worker.remote_address(),
-                    },
+                    "provider": worker.addrs(),
                     "properties": await worker.properties(),
                 })
             except RuntimeError:
@@ -213,6 +221,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # IOLoop.current().run_sync(test_asyncadb)
-    IOLoop.current().run_sync(_main)
+    IOLoop.current().run_sync(lambda: _main(args.server))
     # IOLoop.current().run_sync(watch_all)
     # IOLoop.current().run_sync(main)
