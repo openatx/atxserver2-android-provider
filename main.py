@@ -3,11 +3,13 @@
 #
 
 import argparse
+import collections
 import json
 import os
 import pprint
 import socket
 import subprocess
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 
 import requests
@@ -16,8 +18,9 @@ from logzero import logger
 from tornado import gen, websocket
 from tornado.concurrent import run_on_executor
 from tornado.ioloop import IOLoop
+from tornado.queues import Queue
 from tornado.web import RequestHandler
-from tornado.websocket import WebSocketHandler
+from tornado.websocket import WebSocketHandler, websocket_connect
 
 import asyncadb
 from freeport import freeport
@@ -40,18 +43,72 @@ def current_ip():
     return ip
 
 
+def update_recursive(d: dict, u: dict) -> dict:
+    for k, v in u.items():
+        if isinstance(v, collections.Mapping):
+            d[k] = update_recursive(d.get(k, {}), v)
+        else:
+            d[k] = v
+    return d
+
+
 class ServerConnection(object):
     def __init__(self, server_addr="localhost:4000"):
         self._server_addr = server_addr
-        self._ws = None
+        self._queue = Queue()
+        self._db = defaultdict(dict)
 
-    async def safe_connect(self):
-        """ 自带重连逻辑 """
-        await self.connect()
+    async def initialize(self):
+        self._ws = await self.connect()
+        IOLoop.current().spawn_callback(self._read_until_closed)
+        IOLoop.current().spawn_callback(self._drain_messages)
+
+    async def _drain_messages(self):
+        async for message in self._queue:
+            if message is None:
+                logger.info("Resent messages: %s", self._db)
+                for _, v in self._db.items():
+                    await self._ws.write_message(v)
+                continue
+
+            udid = message['udid']
+            update_recursive(self._db, {udid: message})
+            self._queue.task_done()
+
+            if self._ws:
+                try:
+                    await self._ws.write_message(message)
+                    logger.debug("websocket send: %s", message)
+                except TypeError as e:
+                    logger.info("websocket write_message error: %s", e)
+
+    async def _read_until_closed(self):
+        while True:
+            message = await self._ws.read_message()
+            logger.debug("WS read message: %s", message)
+            if message is None:
+                self._ws = None
+                logger.warning("WS closed")
+                self._ws = await self.connect()
+                await self._queue.put(None)
+            logger.info("WS receive message: %s", message)
 
     async def connect(self):
+        cnt = 0
+        while True:
+            try:
+                ws = await self.unsafe_connect()
+                cnt = 0
+                return ws
+            except Exception as e:
+                cnt = min(30, cnt+1)
+                logger.warning(
+                    "WS connect error: %s, reconnect after %ds", e, cnt+1)
+                await gen.sleep(cnt+1)
+
+    async def unsafe_connect(self):
         """ 需要实现自动重连的逻辑 """
-        ws = self._ws = await websocket.websocket_connect(
+        ws = await websocket_connect(
             "ws://" + self._server_addr + "/websocket/heartbeat")
         ws.__class__ = SafeWebSocket
 
@@ -63,37 +120,17 @@ class ServerConnection(object):
         })  # priority the large the importanter
 
         msg = await ws.read_message()
-        logger.info("read websocket: %s", msg)
-
-        # read message until EOF
-        return self
+        logger.info("WS receive: %s", msg)
+        return ws
 
     async def write_message(self, message: dict):
-        assert "command" in message
-        logger.debug("SEND to server: %s", pprint.pformat(message))
-
-        return await self._ws.write_message(message)
+        await self._queue.put(message)
 
     async def device_update(self, data: dict):
         data['command'] = 'update'
         data['platform'] = 'android'
 
         await self.write_message(data)
-
-    async def came_online(self, udid: str, data: dict):
-        data["platform"] = "android"
-        data["udid"] = udid
-        data["present"] = True
-        address = data.pop("address", None)
-
-        await self.write_message({
-            "command": "update",
-            "address": address,  # atx-agent listen address
-            "data": data
-        })
-
-    async def went_offline(self, udid: str):
-        pass
 
     async def healthcheck(self):
         await self._ws.write_message({"command": "ping"})
@@ -113,14 +150,16 @@ class AndroidWorker(object):
         """
         do forward and start proxy
         """
-        logger.info("forward atx-agent")
+        logger.info("Init device: %s", self._serial)
+        logger.debug("forward atx-agent")
         self._atx_proxy_port = self.proxy_device_port(7912)
         self._whatsinput_port = self.proxy_device_port(6677)
 
         port = self._adb_remote_port = freeport.get()
-        logger.info("adbkit start, port %d", port)
+        logger.debug("adbkit start, port %d", port)
+        adbkit_path = os.path.abspath('node_modules/.bin/adbkit')
         p2 = subprocess.Popen([
-            os.path.abspath('node_modules/.bin/adbkit'), 'usb-device-to-tcp', '-p', str(self._adb_remote_port), self._serial])
+            adbkit_path, 'usb-device-to-tcp', '-p', str(self._adb_remote_port), self._serial])
         self._procs.append(p2)
 
     def addrs(self):
@@ -133,19 +172,26 @@ class AndroidWorker(object):
             "whatsinputAddress": port2addr(self._whatsinput_port),
         }
 
+    def adb_call(self, *args):
+        """ call adb with serial """
+        cmds = ['adb', '-s', self._serial] + list(args)
+        logger.debug("RUN: %s", subprocess.list2cmdline(cmds))
+        return subprocess.call(cmds)
+
     def proxy_device_port(self, device_port: int) -> int:
         """ reverse-proxy device:port to *:port """
         local_port = freeport.get()
-        logger.info("adb foward tcp:%d -> tcp:%d", local_port, device_port)
-        subprocess.call(['adb', 'forward', 'tcp:{}'.format(
-            local_port), 'tcp:{}'.format(device_port)])
+        logger.debug("adb foward tcp:%d -> tcp:%d", local_port, device_port)
+
+        self.adb_call('forward', 'tcp:{}'.format(
+            local_port), 'tcp:{}'.format(device_port))
 
         listen_port = freeport.get()
-        logger.info("tcpproxy.js start *:%d -> %d",
-                    listen_port, local_port)
+        logger.debug("tcpproxy.js start *:%d -> %d",
+                     listen_port, local_port)
         p = subprocess.Popen(
             ['node', 'tcpproxy.js',
-             str(listen_port), 'localhost', str(local_port)])
+             str(listen_port), 'localhost', str(local_port)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self._procs.append(p)
         return listen_port
 
@@ -168,17 +214,9 @@ class AndroidWorker(object):
             p.terminate()
 
 
-# async def main():
-#     try:
-#         await run()
-#     except KeyboardInterrupt as e:
-#         logger.info("Ctrl+C interrupt catched: %s", e)
-#         for p in providers.values():
-#             p.close()
-
-
-async def _main(server_addr: str = ''):
-    server = await ServerConnection(server_addr).connect()
+async def async_main(server_addr: str = ''):
+    server = ServerConnection(server_addr)
+    await server.initialize()
 
     udids = {}
     async for event in adb.track_devices():
@@ -192,7 +230,6 @@ async def _main(server_addr: str = ''):
                     # "private": False, # TODO
                     "udid": udid,
                     "platform": "android",
-                    "present": True,
                     "provider": worker.addrs(),
                     "properties": await worker.properties(),
                 })
@@ -202,7 +239,7 @@ async def _main(server_addr: str = ''):
             udid = udids[event.serial]
             await server.device_update({
                 "udid": udid,
-                "present": False,
+                "provider": None,  # not present
             })
         logger.info("initial finished %s", event.serial)
 
@@ -221,6 +258,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # IOLoop.current().run_sync(test_asyncadb)
-    IOLoop.current().run_sync(lambda: _main(args.server))
+    IOLoop.current().run_sync(lambda: async_main(args.server))
     # IOLoop.current().run_sync(watch_all)
     # IOLoop.current().run_sync(main)
