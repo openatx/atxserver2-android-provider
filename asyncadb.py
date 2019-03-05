@@ -3,6 +3,7 @@
 # Refs adb SERVICES.TXT
 # https://github.com/aosp-mirror/platform_system_core/blob/master/adb/SERVICES.TXT
 
+import os
 import subprocess
 from collections import namedtuple
 
@@ -11,30 +12,85 @@ from logzero import logger
 from tornado import gen
 from tornado.tcpclient import TCPClient
 
+
 OKAY = "OKAY"
 FAIL = "FAIL"
 
 
 DeviceItem = namedtuple("Device", ['serial', 'status'])
 DeviceEvent = namedtuple('DeviceEvent', ['present', 'serial', 'status'])
+ForwardItem = namedtuple("ForwardItem", ['serial', 'local', 'remote'])
 
 
 class AdbError(Exception):
     """ adb error """
 
 
-class Adb(object):
+class AdbStreamConnection(tornado.iostream.IOStream):
+    """
+    Example usgae:
+        async with AdbStreamConnection(host, port) as c:
+            c.send_cmd("host:kill")
+    """
+
+    def __init__(self, host, port):
+        self.__host = host
+        self.__port = port
+        self.__stream = None
+
+    @property
+    def stream(self):
+        return self.__stream
+
+    async def send_cmd(self, cmd: str):
+        await self.stream.write("{:04x}{}".format(len(cmd),
+                                                  cmd).encode('utf-8'))
+
+    async def read_bytes(self, num: int):
+        return (await self.stream.read_bytes(num)).decode()
+
+    async def read_string(self):
+        lenstr = await self.read_bytes(4)
+        msgsize = int(lenstr, 16)
+        return await self.read_bytes(msgsize)
+
+    async def check_okay(self):
+        data = await self.read_bytes(4)
+        if data == FAIL:
+            raise AdbError(await self.read_string())
+        elif data == OKAY:
+            return
+        else:
+            raise AdbError("Unknown data: %s" % data)
+
+    async def connect(self):
+        adb_host = self.__host or os.environ.get(
+            "ANDROID_ADB_SERVER_HOST", "127.0.0.1")
+        adb_port = self.__port or int(os.environ.get(
+            "ANDROID_ADB_SERVER_PORT", 5037))
+        stream = await TCPClient().connect(adb_host, adb_port)
+        self.__stream = stream
+        return self
+
+    async def __aenter__(self):
+        return await self.connect()
+
+    async def __aexit__(self, exc_type, exc, tb):
+        self.stream.close()
+
+
+class AdbClient(object):
     def __init__(self):
         self._stream = None
 
-    async def connect(self):
-        return await TCPClient().connect("127.0.0.1", 5037)
+    def connect(self, host=None, port=None) -> AdbStreamConnection:
+        return AdbStreamConnection(host, port)
 
     async def server_version(self) -> int:
-        stream = await self.connect()
-        await self.send_cmd("host:version", stream)
-        await self._check_okay(stream)
-        return int(await self.read_string(stream), 16)
+        async with self.connect() as c:
+            await c.send_cmd("host:version")
+            await c.check_okay()
+            return int(await c.read_string(), 16)
 
     async def track_devices(self):
         """
@@ -69,11 +125,11 @@ class Adb(object):
                 logger.info("adb-server started, version: %d", version)
 
     async def _unsafe_track_devices(self):
-        stream = await self.connect()
-        await self.send_cmd("host:track-devices", stream)
-        await self._check_okay(stream)
-        while True:
-            yield await self.read_string(stream)
+        async with self.connect() as conn:
+            await conn.send_cmd("host:track-devices")
+            await conn.check_okay()
+            while True:
+                yield await conn.read_string()
 
     def _diff_devices(self, orig_devices: list, curr_devices: list):
         """ Return iter(DeviceEvent) """
@@ -81,15 +137,6 @@ class Adb(object):
             yield DeviceEvent(False, d.serial, d.status)
         for d in set(curr_devices).difference(orig_devices):
             yield DeviceEvent(True, d.serial, d.status)
-
-    async def _check_okay(self, stream):
-        data = await self.read_bytes(4, stream)
-        if data == FAIL:
-            raise AdbError(await self.read_string(stream))
-        elif data == OKAY:
-            return
-        else:
-            raise AdbError("Unknown data: %s" % data)
 
     def output2devices(self, output: str, limit_status=[]):
         """
@@ -114,36 +161,59 @@ class Adb(object):
         return results
 
     async def shell(self, serial: str, command: str):
-        stream = await self.connect()
-        await self.send_cmd("host:transport:"+serial, stream)
-        await self._check_okay(stream)
-        await self.send_cmd("shell:"+command, stream)
-        await self._check_okay(stream)
-        output = await stream.read_until_close()
-        return output.decode('utf-8')
+        async with self.connect() as conn:
+            await conn.send_cmd("host:transport:"+serial)
+            await conn.check_okay()
+            await conn.send_cmd("shell:"+command)
+            await conn.check_okay()
+            output = await conn.stream.read_until_close()
+            return output.decode('utf-8')
+
+    async def forward_list(self):
+        async with self.connect() as conn:
+            await conn.send_cmd("host-local:list-forward")
+            await conn.check_okay()
+            content = await conn.read_string()
+            for line in content.splitlines():
+                parts = line.split()
+                if len(parts) != 3:
+                    continue
+                yield ForwardItem(*parts)
+
+    async def forward_remove(self, local=None):
+        async with self.connect() as conn:
+            if local:
+                await conn.send_cmd("host-local:killforward:"+local)
+            else:
+                await conn.send_cmd("host-local:killforward-all")
+            await conn.check_okay()
+
+    async def forward(self, serial: str, local: str, remote: str, norebind=False):
+        """
+        Args:
+            serial: device serial
+            local, remote (str): tcp:<port> | localabstract:<name>
+            norebind(bool): set to true will fail it when 
+                    there is already a forward connection from <local>
+        """
+        async with self.connect() as conn:
+            cmds = ["host-serial", serial, "forward"]
+            if norebind:
+                cmds.append('norebind')
+            cmds.append(local+";"+remote)
+            await conn.send_cmd(":".join(cmds))
+            await conn.check_okay()
 
     async def devices(self):
         """
         Return:
             list of devices
         """
-        stream = await self.connect()
-        await self.send_cmd("host:devices", stream)
-        await self._check_okay(stream)
-        content = await self.read_string(stream)
-        return self.output2devices(content)
+        async with self.connect() as conn:
+            await conn.send_cmd("host:devices")
+            await conn.check_okay()
+            content = await conn.read_string()
+            return self.output2devices(content)
 
-    async def send_cmd(self, cmd: str, stream=None):
-        stream = stream or self._stream
-        await stream.write("{:04x}{}".format(len(cmd),
-                                             cmd).encode('utf-8'))
 
-    async def read_bytes(self, num_bytes: int, stream=None):
-        stream = stream or self._stream
-        return (await stream.read_bytes(num_bytes)).decode()
-
-    async def read_string(self, stream=None):
-        stream = stream or self._stream
-        lenstr = await self.read_bytes(4, stream)
-        msgsize = int(lenstr, 16)
-        return await self.read_bytes(msgsize, stream)
+adb = AdbClient()

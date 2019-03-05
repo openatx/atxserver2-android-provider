@@ -7,6 +7,7 @@ import collections
 import json
 import os
 import pprint
+import re
 import socket
 import subprocess
 from collections import defaultdict
@@ -22,10 +23,9 @@ from tornado.queues import Queue
 from tornado.web import RequestHandler
 from tornado.websocket import WebSocketHandler, websocket_connect
 
-import asyncadb
+from asyncadb import adb
 from freeport import freeport
-
-adb = asyncadb.Adb()
+from utils import current_ip, fix_url, update_recursive
 
 
 class SafeWebSocket(websocket.WebSocketClientConnection):
@@ -35,26 +35,27 @@ class SafeWebSocket(websocket.WebSocketClientConnection):
         return await super().write_message(message)
 
 
-def current_ip():
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.connect(("8.8.8.8", 80))
-    ip = s.getsockname()[0]
-    s.close()
-    return ip
+async def heartbeat_connect(server_url: str, provider_url: str):
+    server_url = fix_url(server_url, "ws")
+    provider_url = fix_url(provider_url)
+
+    logger.info("ServerWebsocketURL: %s", server_url)
+    conn = HeartbeatConnection(server_url)
+    conn._server_url = server_url
+    conn._provider_url = provider_url
+
+    await conn.initialize()
+    return conn
 
 
-def update_recursive(d: dict, u: dict) -> dict:
-    for k, v in u.items():
-        if isinstance(v, collections.Mapping):
-            d[k] = update_recursive(d.get(k, {}), v)
-        else:
-            d[k] = v
-    return d
+class HeartbeatConnection(object):
+    """
+    与atxserver2建立连接，汇报当前已经连接的设备
+    """
 
-
-class ServerConnection(object):
-    def __init__(self, server_addr="localhost:4000"):
-        self._server_addr = server_addr
+    def __init__(self, server_url="ws://localhost:4000"):
+        self._server_url = server_url
+        self._provider_url = None
         self._queue = Queue()
         self._db = defaultdict(dict)
 
@@ -64,6 +65,10 @@ class ServerConnection(object):
         IOLoop.current().spawn_callback(self._drain_messages)
 
     async def _drain_messages(self):
+        """
+        - send message to server when server is alive
+        - update local db
+        """
         async for message in self._queue:
             if message is None:
                 logger.info("Resent messages: %s", self._db)
@@ -94,6 +99,10 @@ class ServerConnection(object):
             logger.info("WS receive message: %s", message)
 
     async def connect(self):
+        """
+        Returns:
+            tornado.WebSocket connection
+        """
         cnt = 0
         while True:
             try:
@@ -109,28 +118,26 @@ class ServerConnection(object):
     async def unsafe_connect(self):
         """ 需要实现自动重连的逻辑 """
         ws = await websocket_connect(
-            "ws://" + self._server_addr + "/websocket/heartbeat")
+            self._server_url + "/websocket/heartbeat")
         ws.__class__ = SafeWebSocket
 
         await ws.write_message({
             "command": "handshake",
             "name": "mac",
             "owner": "codeskyblue@gmail.com",
-            "priority": 2
-        })  # priority the large the importanter
+            "url": self._provider_url,
+            "priority": 2,  # the large the importanter
+        })
 
         msg = await ws.read_message()
         logger.info("WS receive: %s", msg)
         return ws
 
-    async def write_message(self, message: dict):
-        await self._queue.put(message)
-
     async def device_update(self, data: dict):
         data['command'] = 'update'
         data['platform'] = 'android'
 
-        await self.write_message(data)
+        await self._queue.put(data)
 
     async def healthcheck(self):
         await self._ws.write_message({"command": "ping"})
@@ -144,16 +151,15 @@ class AndroidWorker(object):
         self._serial = serial
         self._procs = []
         self._current_ip = current_ip()
-        self.initialize()
 
-    def initialize(self):
+    async def init(self):
         """
         do forward and start proxy
         """
         logger.info("Init device: %s", self._serial)
         logger.debug("forward atx-agent")
-        self._atx_proxy_port = self.proxy_device_port(7912)
-        self._whatsinput_port = self.proxy_device_port(6677)
+        self._atx_proxy_port = await self.proxy_device_port(7912)
+        self._whatsinput_port = await self.proxy_device_port(6677)
 
         port = self._adb_remote_port = freeport.get()
         logger.debug("adbkit start, port %d", port)
@@ -178,14 +184,24 @@ class AndroidWorker(object):
         logger.debug("RUN: %s", subprocess.list2cmdline(cmds))
         return subprocess.call(cmds)
 
-    def proxy_device_port(self, device_port: int) -> int:
-        """ reverse-proxy device:port to *:port """
+    def adb_forward_list(self):
+        pass
+
+    async def adb_forward_to_any(self, remote: str) -> int:
+        """ FIXME(ssx): not finished yet """
+        # if already forwarded, just return
+        async for f in adb.forward_list():
+            if f.serial == self._serial:
+                if f.remote == remote and f.local.startswith("tcp:"):
+                    return int(f.local[4:])
+
         local_port = freeport.get()
-        logger.debug("adb foward tcp:%d -> tcp:%d", local_port, device_port)
+        await adb.forward(self._serial, 'tcp:{}'.format(local_port), remote)
+        return local_port
 
-        self.adb_call('forward', 'tcp:{}'.format(
-            local_port), 'tcp:{}'.format(device_port))
-
+    async def proxy_device_port(self, device_port: int) -> int:
+        """ reverse-proxy device:port to *:port """
+        local_port = await self.adb_forward_to_any("tcp:"+str(device_port))
         listen_port = freeport.get()
         logger.debug("tcpproxy.js start *:%d -> %d",
                      listen_port, local_port)
@@ -205,6 +221,11 @@ class AndroidWorker(object):
             "version": version.strip(),
         }
 
+    async def reset(self):
+        self.close()
+        self.adb_call("shell", "input", "keyevent", "HOME")
+        await self.init()  # FIXME(ssx): update ...
+
     def wait(self):
         for p in self._procs:
             p.wait()
@@ -212,52 +233,118 @@ class AndroidWorker(object):
     def close(self):
         for p in self._procs:
             p.terminate()
+        self._procs = []
 
 
-async def async_main(server_addr: str = ''):
-    server = ServerConnection(server_addr)
-    await server.initialize()
+hbconn = None
+udid2worker = {}
 
-    udids = {}
+
+class ColdHandler(tornado.web.RequestHandler):
+
+    def get(self):
+        self.write("Hello ATXServer2")
+
+    async def delete(self, udid):
+        """ 设备清理 """
+        logger.info("Receive colding request for %s", udid)
+        await gen.sleep(5)
+        if udid not in udid2worker:
+            return
+
+        worker = udid2worker[udid]
+
+        logger.info("Origin addrs: %s", worker.addrs())
+        await worker.reset()
+        logger.info("Current addrs: %s", worker.addrs())
+        await hbconn.device_update({
+            "udid": udid,
+            "colding": False,
+            "provider": worker.addrs(),
+        })
+
+
+def make_app():
+    app = tornado.web.Application([
+        (r"/([^/]+)", ColdHandler),
+    ])
+    return app
+
+
+async def async_main(server_url: str):
+    global hbconn
+
+    # start local server
+    listen_port = 3500
+    provider_url = "http://"+current_ip() + ":" + str(listen_port)
+    app = make_app()
+    app.listen(listen_port)
+    logger.info("ProviderURL: %s", provider_url)
+
+    # connect to atxserver2
+    hbconn = await heartbeat_connect(server_url, provider_url)
+
+    serial2udid = {}
+    udid2serial = {}
+
     async for event in adb.track_devices():
         print(repr(event))
         # udid = event.serial  # FIXME(ssx): fix later
         if event.present:
             try:
                 worker = AndroidWorker(event.serial)
-                udid = udids[event.serial] = event.serial
-                await server.device_update({
+                await worker.init()
+                udid = serial2udid[event.serial] = event.serial
+                udid2serial[udid] = event.serial
+                udid2worker[udid] = worker
+
+                await hbconn.device_update({
                     # "private": False, # TODO
                     "udid": udid,
                     "platform": "android",
+                    "colding": False,
                     "provider": worker.addrs(),
                     "properties": await worker.properties(),
                 })
+                logger.info("Device:%s is ready", event.serial)
             except RuntimeError:
-                logger.warning("device:%s initialize failed", event.serial)
+                logger.warning("Device:%s initialize failed", event.serial)
         else:
-            udid = udids[event.serial]
-            await server.device_update({
+            udid = serial2udid[event.serial]
+            if udid in udid2worker:
+                udid2worker[udid].close()
+
+            await hbconn.device_update({
                 "udid": udid,
                 "provider": None,  # not present
             })
-        logger.info("initial finished %s", event.serial)
 
 
 async def test_asyncadb():
     devices = await adb.devices()
     print(devices)
-    output = await adb.shell("3578298f", "getprop ro.product.brand")
-    print(output)
+    # output = await adb.shell("3578298f", "getprop ro.product.brand")
+    # print(output)
+    version = await adb.server_version()
+    print("ServerVersion:", version)
+
+    await adb.forward_remove()
+    await adb.forward("3578298f", "tcp:8888", "tcp:7912")
+    async for f in adb.forward_list():
+        print(f)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '-s', '--server', default='localhost:4000', help='server address')
+    parser.add_argument(
+        '-t', '--test', action="store_true", help="run test code")
     args = parser.parse_args()
 
-    # IOLoop.current().run_sync(test_asyncadb)
-    IOLoop.current().run_sync(lambda: async_main(args.server))
+    if args.test:
+        IOLoop.current().run_sync(test_asyncadb)
+    else:
+        IOLoop.current().run_sync(lambda: async_main(args.server))
     # IOLoop.current().run_sync(watch_all)
     # IOLoop.current().run_sync(main)
