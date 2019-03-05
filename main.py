@@ -25,7 +25,7 @@ from tornado.websocket import WebSocketHandler, websocket_connect
 
 from asyncadb import adb
 from freeport import freeport
-from utils import current_ip, fix_url, update_recursive
+from utils import current_ip, fix_url, update_recursive, id_generator
 
 
 class SafeWebSocket(websocket.WebSocketClientConnection):
@@ -35,7 +35,7 @@ class SafeWebSocket(websocket.WebSocketClientConnection):
         return await super().write_message(message)
 
 
-async def heartbeat_connect(server_url: str, provider_url: str):
+async def heartbeat_connect(server_url: str, provider_url: str, secret: str):
     server_url = fix_url(server_url, "ws")
     provider_url = fix_url(provider_url)
 
@@ -43,6 +43,7 @@ async def heartbeat_connect(server_url: str, provider_url: str):
     conn = HeartbeatConnection(server_url)
     conn._server_url = server_url
     conn._provider_url = provider_url
+    conn._secret = secret
 
     await conn.initialize()
     return conn
@@ -56,6 +57,7 @@ class HeartbeatConnection(object):
     def __init__(self, server_url="ws://localhost:4000"):
         self._server_url = server_url
         self._provider_url = None
+        self._secret = None
         self._queue = Queue()
         self._db = defaultdict(dict)
 
@@ -125,6 +127,7 @@ class HeartbeatConnection(object):
             "command": "handshake",
             "name": "mac",
             "owner": "codeskyblue@gmail.com",
+            "secret": self._secret,
             "url": self._provider_url,
             "priority": 2,  # the large the importanter
         })
@@ -239,6 +242,9 @@ class AndroidWorker(object):
 hbconn = None
 udid2worker = {}
 
+# atxserver2 request to provider, need to add params ?secret=xxxx
+secret = id_generator(10)
+
 
 class ColdHandler(tornado.web.RequestHandler):
 
@@ -248,14 +254,17 @@ class ColdHandler(tornado.web.RequestHandler):
     async def delete(self, udid):
         """ 设备清理 """
         logger.info("Receive colding request for %s", udid)
+        request_secret = self.get_argument("secret")
+        if secret != request_secret:
+            logger.warning("secret not match, expect %s, got %s",
+                           secret, request_secret)
+            return
+
         if udid not in udid2worker:
             return
 
         worker = udid2worker[udid]
-
-        logger.info("Origin addrs: %s", worker.addrs())
         await worker.reset()
-        logger.info("Current addrs: %s", worker.addrs())
         await hbconn.device_update({
             "udid": udid,
             "colding": False,
@@ -281,7 +290,7 @@ async def async_main(server_url: str):
     logger.info("ProviderURL: %s", provider_url)
 
     # connect to atxserver2
-    hbconn = await heartbeat_connect(server_url, provider_url)
+    hbconn = await heartbeat_connect(server_url, provider_url, secret)
 
     serial2udid = {}
     udid2serial = {}
@@ -341,6 +350,7 @@ if __name__ == '__main__':
         '-t', '--test', action="store_true", help="run test code")
     args = parser.parse_args()
 
+    logger.info("provider secret: %s", secret)
     if args.test:
         IOLoop.current().run_sync(test_asyncadb)
     else:
