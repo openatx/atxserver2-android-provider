@@ -223,8 +223,8 @@ class AndroidWorker(object):
 
     async def reset(self):
         self.close()
-        self.adb_call("shell", "input", "keyevent", "HOME")
-        await self.init()  # FIXME(ssx): update ...
+        await adb.shell(self._serial, "input keyevent HOME")
+        await self.init()
 
     def wait(self):
         for p in self._procs:
@@ -248,7 +248,6 @@ class ColdHandler(tornado.web.RequestHandler):
     async def delete(self, udid):
         """ 设备清理 """
         logger.info("Receive colding request for %s", udid)
-        await gen.sleep(5)
         if udid not in udid2worker:
             return
 
