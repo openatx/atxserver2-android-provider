@@ -71,7 +71,8 @@ class HeartbeatConnection(object):
         - send message to server when server is alive
         - update local db
         """
-        async for message in self._queue:
+        while True:
+            message = await self._queue.get()
             if message is None:
                 logger.info("Resent messages: %s", self._db)
                 for _, v in self._db.items():
