@@ -12,5 +12,11 @@ Then
 $ python3 main.py --server localhost:4000
 ```
 
+### Use with docker
+```bash
+docker build -t aap .
+docker run -it --rm --privileged -v /dev/bus/usb:/dev/bus/usb --net host aap python main.py --server localhost:4000
+```
+
 ## LICENSE
 [MIT](LICENSE)
