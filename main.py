@@ -13,7 +13,6 @@ import subprocess
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 
-import requests
 import tornado.web
 from logzero import logger
 from tornado import gen, websocket
@@ -25,7 +24,7 @@ from tornado.websocket import WebSocketHandler, websocket_connect
 
 from asyncadb import adb
 from freeport import freeport
-from utils import current_ip, fix_url, update_recursive, id_generator
+from utils import current_ip, fix_url, id_generator, update_recursive
 
 
 class SafeWebSocket(websocket.WebSocketClientConnection):
@@ -167,9 +166,9 @@ class AndroidWorker(object):
 
         port = self._adb_remote_port = freeport.get()
         logger.debug("adbkit start, port %d", port)
-        adbkit_path = os.path.abspath('node_modules/.bin/adbkit')
+
         p2 = subprocess.Popen([
-            adbkit_path, 'usb-device-to-tcp', '-p', str(self._adb_remote_port), self._serial])
+            'node', 'node_modules/adbkit/bin/adbkit', 'usb-device-to-tcp', '-p', str(self._adb_remote_port), self._serial])
         self._procs.append(p2)
 
     def addrs(self):
