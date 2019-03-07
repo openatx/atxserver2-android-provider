@@ -176,9 +176,9 @@ class AndroidWorker(object):
             return self._current_ip + ":"+str(port)
 
         return {
-            "deviceAddress": port2addr(self._atx_proxy_port),
+            "atxAgentAddress": port2addr(self._atx_proxy_port),
             "remoteConnectAddress": port2addr(self._adb_remote_port),
-            "whatsinputAddress": port2addr(self._whatsinput_port),
+            "whatsInputAddress": port2addr(self._whatsinput_port),
         }
 
     def adb_call(self, *args):
