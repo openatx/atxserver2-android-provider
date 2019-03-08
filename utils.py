@@ -19,7 +19,8 @@ def current_ip():
 def update_recursive(d: dict, u: dict) -> dict:
     for k, v in u.items():
         if isinstance(v, collections.Mapping):
-            d[k] = update_recursive(d.get(k, {}), v)
+            # d.get(k) may return None
+            d[k] = update_recursive(d.get(k) or {}, v)
         else:
             d[k] = v
     return d

@@ -171,7 +171,8 @@ class AdbClient(object):
 
     async def forward_list(self):
         async with self.connect() as conn:
-            await conn.send_cmd("host-local:list-forward")
+            # adb 1.0.40 not support host-local
+            await conn.send_cmd("host:list-forward")
             await conn.check_okay()
             content = await conn.read_string()
             for line in content.splitlines():
@@ -183,9 +184,9 @@ class AdbClient(object):
     async def forward_remove(self, local=None):
         async with self.connect() as conn:
             if local:
-                await conn.send_cmd("host-local:killforward:"+local)
+                await conn.send_cmd("host:killforward:"+local)
             else:
-                await conn.send_cmd("host-local:killforward-all")
+                await conn.send_cmd("host:killforward-all")
             await conn.check_okay()
 
     async def forward(self, serial: str, local: str, remote: str, norebind=False):
