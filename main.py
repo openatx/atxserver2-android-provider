@@ -24,132 +24,15 @@ from tornado.websocket import WebSocketHandler, websocket_connect
 
 from asyncadb import adb
 from freeport import freeport
+from heartbeat import heartbeat_connect
 from utils import current_ip, fix_url, id_generator, update_recursive
 
-
-class SafeWebSocket(websocket.WebSocketClientConnection):
-    async def write_message(self, message, binary=False):
-        if isinstance(message, dict):
-            message = json.dumps(message)
-        return await super().write_message(message)
+hbconn = None
+udid2device = {}
+secret = id_generator(10)
 
 
-async def heartbeat_connect(server_url: str, provider_url: str, secret: str):
-    server_url = fix_url(server_url, "ws")
-    provider_url = fix_url(provider_url)
-
-    logger.info("ServerWebsocketURL: %s", server_url)
-    conn = HeartbeatConnection(server_url)
-    conn._server_url = server_url
-    conn._provider_url = provider_url
-    conn._secret = secret
-
-    await conn.initialize()
-    return conn
-
-
-class HeartbeatConnection(object):
-    """
-    与atxserver2建立连接，汇报当前已经连接的设备
-    """
-
-    def __init__(self, server_url="ws://localhost:4000"):
-        self._server_url = server_url
-        self._provider_url = None
-        self._secret = None
-        self._queue = Queue()
-        self._db = defaultdict(dict)
-
-    async def initialize(self):
-        self._ws = await self.connect()
-        IOLoop.current().spawn_callback(self._read_until_closed)
-        IOLoop.current().spawn_callback(self._drain_messages)
-
-    async def _drain_messages(self):
-        """
-        - send message to server when server is alive
-        - update local db
-        """
-        while True:
-            message = await self._queue.get()
-            if message is None:
-                logger.info("Resent messages: %s", self._db)
-                for _, v in self._db.items():
-                    await self._ws.write_message(v)
-                continue
-
-            udid = message['udid']
-            update_recursive(self._db, {udid: message})
-            self._queue.task_done()
-
-            if self._ws:
-                try:
-                    await self._ws.write_message(message)
-                    logger.debug("websocket send: %s", message)
-                except TypeError as e:
-                    logger.info("websocket write_message error: %s", e)
-
-    async def _read_until_closed(self):
-        while True:
-            message = await self._ws.read_message()
-            logger.debug("WS read message: %s", message)
-            if message is None:
-                self._ws = None
-                logger.warning("WS closed")
-                self._ws = await self.connect()
-                await self._queue.put(None)
-            logger.info("WS receive message: %s", message)
-
-    async def connect(self):
-        """
-        Returns:
-            tornado.WebSocket connection
-        """
-        cnt = 0
-        while True:
-            try:
-                ws = await self.unsafe_connect()
-                cnt = 0
-                return ws
-            except Exception as e:
-                cnt = min(30, cnt+1)
-                logger.warning(
-                    "WS connect error: %s, reconnect after %ds", e, cnt+1)
-                await gen.sleep(cnt+1)
-
-    async def unsafe_connect(self):
-        """ 需要实现自动重连的逻辑 """
-        ws = await websocket_connect(
-            self._server_url + "/websocket/heartbeat")
-        ws.__class__ = SafeWebSocket
-
-        await ws.write_message({
-            "command": "handshake",
-            "name": "mac",
-            "owner": "codeskyblue@gmail.com",
-            "secret": self._secret,
-            "url": self._provider_url,
-            "priority": 2,  # the large the importanter
-        })
-
-        msg = await ws.read_message()
-        logger.info("WS receive: %s", msg)
-        return ws
-
-    async def device_update(self, data: dict):
-        data['command'] = 'update'
-        data['platform'] = 'android'
-
-        await self._queue.put(data)
-
-    async def healthcheck(self):
-        await self._ws.write_message({"command": "ping"})
-        msg = await self._ws.read_message()
-        logger.debug("receive: %s", msg)
-        return msg
-
-
-class AndroidWorker(object):
+class AndroidDevice(object):
     def __init__(self, serial: str):
         self._serial = serial
         self._procs = []
@@ -160,6 +43,8 @@ class AndroidWorker(object):
         do forward and start proxy
         """
         logger.info("Init device: %s", self._serial)
+        logger.debug("start atx-agent")
+        await adb.shell(self._serial, "/data/local/tmp/atx-agent server -d")
         logger.debug("forward atx-agent")
         self._atx_proxy_port = await self.proxy_device_port(7912)
         self._whatsinput_port = await self.proxy_device_port(6677)
@@ -225,6 +110,7 @@ class AndroidWorker(object):
         }
 
     async def reset(self):
+        """ 設備使用完后的清理工作 """
         self.close()
         await adb.shell(self._serial, "input keyevent HOME")
         await self.init()
@@ -237,13 +123,6 @@ class AndroidWorker(object):
         for p in self._procs:
             p.terminate()
         self._procs = []
-
-
-hbconn = None
-udid2worker = {}
-
-# atxserver2 request to provider, need to add params ?secret=xxxx
-secret = id_generator(10)
 
 
 class ColdHandler(tornado.web.RequestHandler):
@@ -260,10 +139,10 @@ class ColdHandler(tornado.web.RequestHandler):
                            secret, request_secret)
             return
 
-        if udid not in udid2worker:
+        if udid not in udid2device:
             return
 
-        worker = udid2worker[udid]
+        worker = udid2device[udid]
         await worker.reset()
         await hbconn.device_update({
             "udid": udid,
@@ -279,18 +158,26 @@ def make_app():
     return app
 
 
-async def async_main(server_url: str):
-    global hbconn
+async def async_main():
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument(
+        '-s', '--server', default='localhost:4000', help='server address')
+    parser.add_argument(
+        '-t', '--test', action="store_true", help="run test code")
+    parser.add_argument(
+        '-p', '--port', type=int, default=3500, help='listen port')
+    args = parser.parse_args()
 
     # start local server
-    listen_port = 3500
-    provider_url = "http://"+current_ip() + ":" + str(listen_port)
+    provider_url = "http://"+current_ip() + ":" + str(args.port)
     app = make_app()
-    app.listen(listen_port)
+    app.listen(args.port)
     logger.info("ProviderURL: %s", provider_url)
 
     # connect to atxserver2
-    hbconn = await heartbeat_connect(server_url, provider_url, secret)
+    global hbconn
+    hbconn = await heartbeat_connect(args.server, secret=secret, self_url=provider_url)
 
     serial2udid = {}
     udid2serial = {}
@@ -300,11 +187,11 @@ async def async_main(server_url: str):
         # udid = event.serial  # FIXME(ssx): fix later
         if event.present:
             try:
-                worker = AndroidWorker(event.serial)
+                worker = AndroidDevice(event.serial)
                 await worker.init()
                 udid = serial2udid[event.serial] = event.serial
                 udid2serial[udid] = event.serial
-                udid2worker[udid] = worker
+                udid2device[udid] = worker
 
                 await hbconn.device_update({
                     # "private": False, # TODO
@@ -319,8 +206,8 @@ async def async_main(server_url: str):
                 logger.warning("Device:%s initialize failed", event.serial)
         else:
             udid = serial2udid[event.serial]
-            if udid in udid2worker:
-                udid2worker[udid].close()
+            if udid in udid2device:
+                udid2device[udid].close()
 
             await hbconn.device_update({
                 "udid": udid,
@@ -343,17 +230,11 @@ async def test_asyncadb():
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '-s', '--server', default='localhost:4000', help='server address')
-    parser.add_argument(
-        '-t', '--test', action="store_true", help="run test code")
-    args = parser.parse_args()
+    # logger.info("provider secret: %s", secret)
+    # if args.test:
+    #     IOLoop.current().run_sync(test_asyncadb)
 
-    logger.info("provider secret: %s", secret)
-    if args.test:
-        IOLoop.current().run_sync(test_asyncadb)
-    else:
-        IOLoop.current().run_sync(lambda: async_main(args.server))
-    # IOLoop.current().run_sync(watch_all)
-    # IOLoop.current().run_sync(main)
+    try:
+        IOLoop.current().run_sync(async_main)
+    except KeyboardInterrupt:
+        logger.info("Interrupt catched")
