@@ -10,9 +10,13 @@ import pprint
 import re
 import socket
 import subprocess
+import tempfile
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 
+import shutil
+import requests
+import apkutils
 import tornado.web
 from logzero import logger
 from tornado import gen, websocket
@@ -37,6 +41,10 @@ class AndroidDevice(object):
         self._serial = serial
         self._procs = []
         self._current_ip = current_ip()
+
+    @property
+    def serial(self):
+        return self._serial
 
     async def init(self):
         """
@@ -126,10 +134,6 @@ class AndroidDevice(object):
 
 
 class ColdHandler(tornado.web.RequestHandler):
-
-    def get(self):
-        self.write("Hello ATXServer2")
-
     async def delete(self, udid):
         """ 设备清理 """
         logger.info("Receive colding request for %s", udid)
@@ -151,9 +155,89 @@ class ColdHandler(tornado.web.RequestHandler):
         })
 
 
+class CorsMixin(object):
+    CORS_ORIGIN = '*'
+    CORS_METHODS = 'GET,POST,OPTIONS'
+    CORS_CREDENTIALS = True
+    CORS_HEADERS = "x-requested-with,authorization"
+
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", self.CORS_ORIGIN)
+        self.set_header("Access-Control-Allow-Headers", self.CORS_HEADERS)
+        self.set_header('Access-Control-Allow-Methods', self.CORS_METHODS)
+
+    def options(self):
+        # no body
+        self.set_status(204)
+        self.finish()
+
+
+class AppHandler(CorsMixin, tornado.web.RequestHandler):
+    executor = ThreadPoolExecutor(4)
+
+    @run_on_executor(executor='executor')
+    def app_install(self, serial: str, url: str):
+        try:
+            r = requests.get(url, stream=True)
+            if r.status_code != 200:
+                return {"success": False, "description": r.reason}
+        except Exception as e:
+            return {"success": False, "description": str(e)}
+
+        # Windows not support tempfile.NamedTemporyFile
+        apk_path = tempfile.mktemp(
+            suffix=".apk", prefix="tmpfile-", dir=os.getcwd())
+        apk_path = os.path.relpath(apk_path)
+        logger.debug("temp apk path: %s", apk_path)
+        try:
+            with open(apk_path, "wb") as tfile:
+                content_length = int(r.headers.get("content-length", 0))
+                if content_length:
+                    for chunk in r.iter_content(chunk_size=40960):
+                        tfile.write(chunk)
+                else:
+                    shutil.copyfileobj(r.raw, tfile)
+
+            apk = apkutils.APK(apk_path)
+            package_name = apk.manifest and apk.manifest.package_name
+            logger.debug("package name: %s", package_name)
+
+            p = subprocess.Popen(["adb", "-s", serial, "install", "-r", apk_path],
+                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            output = ""
+            for line in p.stdout:
+                line = line.decode('utf-8')
+                print(line)
+                output += line
+            success = "Success" in output
+            exit_code = p.wait()
+
+            if not success:
+                return {"success": False, "description": output}
+            if package_name:  # sometimes package_name can not retrived
+                subprocess.run(["adb", "-s", serial, "shell", "monkey", '-p',
+                                package_name, "-c", "android.intent.category.LAUNCHER", "1"])
+            return {"success": success,
+                    "packageName": package_name,
+                    "return": exit_code,
+                    "output": output}
+        except Exception as e:
+            return {"success": False, "description": str(e)}
+        finally:
+            os.unlink(apk_path)
+
+    @gen.coroutine
+    def post(self, udid):
+        device = udid2device[udid]
+        url = self.get_argument("url")
+        ret = yield self.app_install(device.serial, url)
+        self.write(ret)
+
+
 def make_app():
     app = tornado.web.Application([
-        (r"/([^/]+)", ColdHandler),
+        (r"/devices/([^/]+)/cold", ColdHandler),
+        (r"/devices/([^/]+)/app/install", AppHandler)
     ])
     return app
 
