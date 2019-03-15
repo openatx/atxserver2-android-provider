@@ -133,8 +133,8 @@ class AndroidDevice(object):
         self._procs = []
 
 
-class ColdHandler(tornado.web.RequestHandler):
-    async def delete(self, udid):
+class ColdingHandler(tornado.web.RequestHandler):
+    async def post(self, udid):
         """ 设备清理 """
         logger.info("Receive colding request for %s", udid)
         request_secret = self.get_argument("secret")
@@ -153,6 +153,7 @@ class ColdHandler(tornado.web.RequestHandler):
             "colding": False,
             "provider": worker.addrs(),
         })
+        self.write({"success": True, "description": "Device colded"})
 
 
 class CorsMixin(object):
@@ -236,7 +237,7 @@ class AppHandler(CorsMixin, tornado.web.RequestHandler):
 
 def make_app():
     app = tornado.web.Application([
-        (r"/devices/([^/]+)/cold", ColdHandler),
+        (r"/devices/([^/]+)/cold", ColdingHandler),
         (r"/devices/([^/]+)/app/install", AppHandler)
     ])
     return app
