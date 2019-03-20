@@ -1,4 +1,5 @@
-logzero
-tornado==6.0.1
+logzero==1.5.0
+apkutils==0.2.8
+adbutils==0.1.3
+tornado
 requests
-adbutils

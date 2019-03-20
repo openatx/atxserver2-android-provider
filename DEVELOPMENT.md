@@ -5,10 +5,18 @@
 目前Linux/Amd64可以通过Dockerhub自动构建。树莓派Linux/Arm需要手动构建
 
 ```bash
+# 在树莓派上运行
+
+# 安装Docker
+curl -fsSL https://get.docker.com | sh
+
+# 构建镜像
 git clone https://github.com/openatx/atxserver2-android-provider
 cd atxserver2-android-provider
-docker build -t codeskyblue/atxserver2-android-provider:raspberry .
-docker push !$
+
+IMAGE="codeskyblue/atxserver2-android-provider:raspberry"
+docker build -t $IMAGE .
+docker push $IMAGE
 ```
 
 Dockerhub Repo地址 https://cloud.docker.com/repository/docker/codeskyblue/atxserver2-android-provider
@@ -19,9 +27,12 @@ Multiarch support
 ```bash
 docker manifest create codeskyblue/atxserver2-android-provider:latest \
     codeskyblue/atxserver2-android-provider:linux \
-    codeskyblue/atxserver2-android-provider:raspberry
-docker manifest push codeskyblue/atxserver2-android-provider:latest
+    codeskyblue/atxserver2-android-provider:raspberry \
+    --amend
+docker manifest push --purge codeskyblue/atxserver2-android-provider:latest
 ```
+
+> amend and purge show up here, because https://github.com/docker/cli/issues/954
 
 测试一下
 
