@@ -2,6 +2,7 @@
 # coding: utf-8
 #
 
+import zipfile
 import argparse
 import collections
 import json
@@ -36,12 +37,18 @@ hbconn = None
 udid2device = {}
 secret = id_generator(10)
 
+class InitError(Exception):
+    """ device init error """
 
 class AndroidDevice(object):
     def __init__(self, serial: str):
         self._serial = serial
         self._procs = []
         self._current_ip = current_ip()
+        self._device = adbclient.device_with_serial(serial)
+
+    def __repr__(self):
+        return "["+self._serial+"]"
 
     @property
     def serial(self):
@@ -53,31 +60,68 @@ class AndroidDevice(object):
         """
         logger.info("Init device: %s", self._serial)
 
-        self._init_apks()
-        self._init_mini_captouch()
-
-        logger.debug("start atx-agent")
-        await adb.shell(self._serial, "/data/local/tmp/atx-agent server -d")
-        logger.debug("forward atx-agent")
-
+        self._init_binaries()
         await self._init_forwards()
 
-    def _init_mini_captouch(self):
-        pass
+        await adb.shell(self._serial, "/data/local/tmp/atx-agent server -d")
+
+    def _init_binaries(self):
+        # minitouch, minicap, minicap.so
+        d = self._device
+        sdk = d.getprop("ro.build.version.sdk") # eg 26
+        abi = d.getprop('ro.product.cpu.abi') # eg arm64-v8a
+        pre = d.getprop('ro.build.version.preview_sdk') # eg 0
+        abis = (d.getprop('ro.product.cpu.abilist').strip() or abi).split(",")
+        # print(sdk, abi, pre)
+        if pre and pre != "0":
+            sdk = sdk + pre
+        
+        logger.debug("%s sdk: %s, abi: %s, abis: %s", self, sdk, abi, abis)
+
+        prefix = "stf-binaries-master/node_modules/minicap-prebuilt/prebuilt/"
+        self._push_stf(prefix+abi+"/lib/android-"+sdk+"/minicap.so", "/data/local/tmp/minicap.so", 0o644)
+        self._push_stf(prefix+abi+"/bin/minicap", "/data/local/tmp/minicap")
+
+        prefix = "stf-binaries-master/node_modules/minitouch-prebuilt/prebuilt/"
+        self._push_stf(prefix+abi+"/bin/minitouch", "/data/local/tmp/minitouch")
+
+        # atx-agent
+        abimaps = {
+            'armeabi-v7a': 'atx-agent-armv7',
+            'arm64-v8a': 'atx-agent-armv7',
+            'armeabi': 'atx-agent-armv6',
+            'x86': 'atx-agent-386',
+        }
+        okfiles = [abimaps[abi] for abi in abis if abi in abimaps]
+        if not okfiles:
+            raise InitError("no avaliable abilist", abis)
+        logger.debug("%s use atx-agent: %s", self, okfiles[0])
+        self._push_stf(okfiles[0], "/data/local/tmp/atx-agent", zipfile_path="vendor/atx-agent-latest.zip")
+
+    def _push_stf(self, path: str, dest: str, mode=0o755, 
+                zipfile_path: str ="vendor/stf-binaries-master.zip"):
+        """ push minicap and minitouch from zip """
+        with zipfile.ZipFile(zipfile_path) as z:
+            if path not in z.namelist():
+                logger.warning("stf stuff %s not found", path)
+                return
+            with z.open(path) as f:
+                self._device.sync.push(f, dest, mode)
 
     def _init_apks(self):
-        device = adbclient.device_with_serial(self._serial)
-        device.install("vendor/WhatsInput_v1.0_apkpure.com.apk")
+        self._device.install("vendor/WhatsInput_v1.0_apkpure.com.apk")
 
     async def _init_forwards(self):
+        logger.debug("%s forward atx-agent", self)
         self._atx_proxy_port = await self.proxy_device_port(7912)
         self._whatsinput_port = await self.proxy_device_port(6677)
 
         port = self._adb_remote_port = freeport.get()
-        logger.debug("adbkit start, port %d", port)
+        logger.debug("%s adbkit start, port %d", self, port)
 
         self.run_background([
-            'node', 'node_modules/adbkit/bin/adbkit', 'usb-device-to-tcp', '-p', str(self._adb_remote_port), self._serial])
+            'node', 'node_modules/adbkit/bin/adbkit', 
+            'usb-device-to-tcp', '-p', str(self._adb_remote_port), self._serial], silent=True)
 
     def addrs(self):
         def port2addr(port):
@@ -111,7 +155,7 @@ class AndroidDevice(object):
         """ reverse-proxy device:port to *:port """
         local_port = await self.adb_forward_to_any("tcp:"+str(device_port))
         listen_port = freeport.get()
-        logger.debug("tcpproxy.js start *:%d -> %d",
+        logger.debug("%s tcpproxy.js start *:%d -> %d", self,
                      listen_port, local_port)
         self.run_background(['node', 'tcpproxy.js',
                              str(listen_port), 'localhost', str(local_port)], silent=True)
@@ -291,19 +335,25 @@ async def async_main():
         # udid = event.serial  # FIXME(ssx): fix later
         if event.present:
             try:
-                worker = AndroidDevice(event.serial)
-                await worker.init()
+                device = AndroidDevice(event.serial)
+
+                await device.init()
+                # try:
+                # except Exception as e:
+                #     logger.warning("Init device error: %s", e)
+                #     continue
+
                 udid = serial2udid[event.serial] = event.serial
                 udid2serial[udid] = event.serial
-                udid2device[udid] = worker
+                udid2device[udid] = device
 
                 await hbconn.device_update({
                     # "private": False, # TODO
                     "udid": udid,
                     "platform": "android",
                     "colding": False,
-                    "provider": worker.addrs(),
-                    "properties": await worker.properties(),
+                    "provider": device.addrs(),
+                    "properties": await device.properties(),
                 })
                 logger.info("Device:%s is ready", event.serial)
             except RuntimeError:

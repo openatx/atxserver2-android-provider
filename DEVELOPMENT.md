@@ -49,3 +49,11 @@ Image: codeskyblue/atxserver2-android-provider
 ```
 
 参考资料：https://medium.com/@mauridb/docker-multi-architecture-images-365a44c26be6
+
+## /vendor 大文件
+虽说是大文件，其实也不大
+
+`/vendor`目录下的文件通过`git-lfs`管理
+
+- `stf-binaries-master.zip` 直接去 https://github.com/codeskyblue/stf-binaries 下载zip
+- `atx-agent-latest.zip` 需要cd到vendor目录，运行`download-atx-agent.py`去生成

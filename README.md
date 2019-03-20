@@ -1,24 +1,32 @@
 # atxserver2-android-provider
-atxserver2 android provider
+atxserver2 android provider  for [atxserver2](https://github.com/openatx/atxserver2)
 
-## Usage
-
-1. init uiautomator2 first
-2. `adb install WhatsInput_v1.0_apkpure.com.apk`
-
-Then
+## Usage from source
+依赖 `Python3.6+`, `NodeJS`, `Git-LFS`
 
 ```bash
-$ python3 main.py --server localhost:4000
+git lfs clone https://github.com/openatx/atxserver2-android-provider
+cd atxserver2-android-provider
+
+# 安装依赖
+npm install
+pip install -r requirements.txt
+
+# 启动，需要指定atxserver2的地址, 假设地址为 http://localhost:4000
+python3 main.py --server localhost:4000
 ```
 
+Provider可以通过`adb track-devices`自动发现已经接入的设备，当手机接入到电脑上时，会自动给手机安装`minicap`, `minitouch`, `atx-agent`, `whatsinput-apk`
+
+TODO(ssx): 还差一个 app-uiautomator.apk 没有自动安装
+
 ### Use with docker
-命令有点长，需要用到usb设备，还需要用到当前网络
+命令有点长，但是部署简单
 
 手动build
 ```bash
-docker build -t aap .
-docker run -it --rm --privileged -v /dev/bus/usb:/dev/bus/usb --net host aap python main.py --server localhost:4000
+docker build -t atx2android .
+docker run -it --rm --privileged -v /dev/bus/usb:/dev/bus/usb --net host atx2android python main.py --server localhost:4000
 ```
 
 使用dockerhub上的image(当前有Linux/amd64和Linux/arm的镜像)
