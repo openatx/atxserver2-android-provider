@@ -10,6 +10,9 @@
 # 安装Docker
 curl -fsSL https://get.docker.com | sh
 
+# 登录Docker
+docker login
+
 # 构建镜像
 git clone https://github.com/openatx/atxserver2-android-provider
 cd atxserver2-android-provider
