@@ -8,15 +8,14 @@ import json
 import os
 import pprint
 import re
+import shutil
 import socket
 import subprocess
 import tempfile
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 
-import shutil
 import requests
-import apkutils
 import tornado.web
 from logzero import logger
 from tornado import gen, websocket
@@ -26,6 +25,8 @@ from tornado.queues import Queue
 from tornado.web import RequestHandler
 from tornado.websocket import WebSocketHandler, websocket_connect
 
+import apkutils
+from adbutils import adb as adbclient
 from asyncadb import adb
 from freeport import freeport
 from heartbeat import heartbeat_connect
@@ -51,18 +52,32 @@ class AndroidDevice(object):
         do forward and start proxy
         """
         logger.info("Init device: %s", self._serial)
+
+        self._init_apks()
+        self._init_mini_captouch()
+
         logger.debug("start atx-agent")
         await adb.shell(self._serial, "/data/local/tmp/atx-agent server -d")
         logger.debug("forward atx-agent")
+
+        await self._init_forwards()
+
+    def _init_mini_captouch(self):
+        pass
+
+    def _init_apks(self):
+        device = adbclient.device_with_serial(self._serial)
+        device.install("vendor/WhatsInput_v1.0_apkpure.com.apk")
+
+    async def _init_forwards(self):
         self._atx_proxy_port = await self.proxy_device_port(7912)
         self._whatsinput_port = await self.proxy_device_port(6677)
 
         port = self._adb_remote_port = freeport.get()
         logger.debug("adbkit start, port %d", port)
 
-        p2 = subprocess.Popen([
+        self.run_background([
             'node', 'node_modules/adbkit/bin/adbkit', 'usb-device-to-tcp', '-p', str(self._adb_remote_port), self._serial])
-        self._procs.append(p2)
 
     def addrs(self):
         def port2addr(port):
@@ -79,9 +94,6 @@ class AndroidDevice(object):
         cmds = ['adb', '-s', self._serial] + list(args)
         logger.debug("RUN: %s", subprocess.list2cmdline(cmds))
         return subprocess.call(cmds)
-
-    def adb_forward_list(self):
-        pass
 
     async def adb_forward_to_any(self, remote: str) -> int:
         """ FIXME(ssx): not finished yet """
@@ -101,11 +113,18 @@ class AndroidDevice(object):
         listen_port = freeport.get()
         logger.debug("tcpproxy.js start *:%d -> %d",
                      listen_port, local_port)
-        p = subprocess.Popen(
-            ['node', 'tcpproxy.js',
-             str(listen_port), 'localhost', str(local_port)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        self._procs.append(p)
+        self.run_background(['node', 'tcpproxy.js',
+                             str(listen_port), 'localhost', str(local_port)], silent=True)
         return listen_port
+
+    def run_background(self, *args, **kwargs):
+        silent = kwargs.pop('silent', False)
+        if silent:
+            kwargs['stdout'] = subprocess.DEVNULL
+            kwargs['stderr'] = subprocess.DEVNULL
+        p = subprocess.Popen(*args, **kwargs)
+        self._procs.append(p)
+        return p
 
     async def properties(self):
         brand = await adb.shell(self._serial, "getprop ro.product.brand")
@@ -131,29 +150,6 @@ class AndroidDevice(object):
         for p in self._procs:
             p.terminate()
         self._procs = []
-
-
-class ColdingHandler(tornado.web.RequestHandler):
-    async def post(self, udid):
-        """ 设备清理 """
-        logger.info("Receive colding request for %s", udid)
-        request_secret = self.get_argument("secret")
-        if secret != request_secret:
-            logger.warning("secret not match, expect %s, got %s",
-                           secret, request_secret)
-            return
-
-        if udid not in udid2device:
-            return
-
-        worker = udid2device[udid]
-        await worker.reset()
-        await hbconn.device_update({
-            "udid": udid,
-            "colding": False,
-            "provider": worker.addrs(),
-        })
-        self.write({"success": True, "description": "Device colded"})
 
 
 class CorsMixin(object):
@@ -233,6 +229,29 @@ class AppHandler(CorsMixin, tornado.web.RequestHandler):
         url = self.get_argument("url")
         ret = yield self.app_install(device.serial, url)
         self.write(ret)
+
+
+class ColdingHandler(tornado.web.RequestHandler):
+    async def post(self, udid):
+        """ 设备清理 """
+        logger.info("Receive colding request for %s", udid)
+        request_secret = self.get_argument("secret")
+        if secret != request_secret:
+            logger.warning("secret not match, expect %s, got %s",
+                           secret, request_secret)
+            return
+
+        if udid not in udid2device:
+            return
+
+        worker = udid2device[udid]
+        await worker.reset()
+        await hbconn.device_update({
+            "udid": udid,
+            "colding": False,
+            "provider": worker.addrs(),
+        })
+        self.write({"success": True, "description": "Device colded"})
 
 
 def make_app():

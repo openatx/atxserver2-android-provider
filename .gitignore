@@ -109,12 +109,12 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+.vscode/
 .dmypy.json
 dmypy.json
 
 # Pyre type checker
 .pyre/
-
 # JS
 node_modules/
 package-lock.json
