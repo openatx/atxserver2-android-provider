@@ -1,6 +1,8 @@
 #!/bin/bash -x
 #
 
+set -e
+
 TAG=
 case "$(uname -m)" in
     x86_64)

@@ -64,7 +64,8 @@ class AndroidDevice(object):
         self._init_apks()
         await self._init_forwards()
 
-        await adb.shell(self._serial, "/data/local/tmp/atx-agent server -d")
+        await adb.shell(self._serial, "/data/local/tmp/atx-agent server --stop")
+        await adb.shell(self._serial, "/data/local/tmp/atx-agent server --nouia -d")
 
     def _init_binaries(self):
         # minitouch, minicap, minicap.so
