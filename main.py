@@ -61,6 +61,7 @@ class AndroidDevice(object):
         logger.info("Init device: %s", self._serial)
 
         self._init_binaries()
+        self._init_apks()
         await self._init_forwards()
 
         await adb.shell(self._serial, "/data/local/tmp/atx-agent server -d")
@@ -109,7 +110,22 @@ class AndroidDevice(object):
                 self._device.sync.push(f, dest, mode)
 
     def _init_apks(self):
-        self._device.install("vendor/WhatsInput_v1.0_apkpure.com.apk")
+        self._install_apk("vendor/WhatsInput_v1.0_apkpure.com.apk")
+        self._install_apk("vendor/app-uiautomator.apk")
+        self._install_apk("vendor/app-uiautomator-test.apk")
+    
+    def _install_apk(self, path:str):
+        try:
+            m = apkutils.APK(path).manifest
+            info = self._device.package_info(m.package_name)
+            if info and m.version_code == info['version_code'] and m.version_name == info['version_name']:
+                logger.debug("%s already installed %s", self, path)
+            else:
+                print(info, "M", m.version_code, m.version_name)
+                logger.debug("%s install %s", self, path)
+                self._device.install(path)
+        except Exception as e:
+            logger.warning("%s Install apk %s error %s", self, path, e)
 
     async def _init_forwards(self):
         logger.debug("%s forward atx-agent", self)

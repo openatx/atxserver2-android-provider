@@ -2,15 +2,16 @@
 # coding: utf-8
 #
 
-from uiautomator2.version import __atx_agent_version__
+import shutil
+import tarfile
+import tempfile
+import zipfile
 
 import humanize
-import zipfile
-import tarfile
-import requests
 import progress.bar
-import shutil
-import tempfile
+import requests
+
+from uiautomator2.version import __atx_agent_version__
 
 
 class DownloadBar(progress.bar.Bar):
