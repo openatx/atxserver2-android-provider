@@ -2,7 +2,6 @@
 # coding: utf-8
 #
 
-import zipfile
 import argparse
 import collections
 import json
@@ -13,6 +12,8 @@ import shutil
 import socket
 import subprocess
 import tempfile
+import traceback
+import zipfile
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 
@@ -29,6 +30,7 @@ from tornado.websocket import WebSocketHandler, websocket_connect
 import apkutils
 from adbutils import adb as adbclient
 from asyncadb import adb
+from device_names import device_names
 from freeport import freeport
 from heartbeat import heartbeat_connect
 from utils import current_ip, fix_url, id_generator, update_recursive
@@ -122,10 +124,11 @@ class AndroidDevice(object):
             if info and m.version_code == info['version_code'] and m.version_name == info['version_name']:
                 logger.debug("%s already installed %s", self, path)
             else:
-                print(info, "M", m.version_code, m.version_name)
+                print(info, ":", m.version_code, m.version_name)
                 logger.debug("%s install %s", self, path)
                 self._device.install(path)
         except Exception as e:
+            traceback.print_exc()
             logger.warning("%s Install apk %s error %s", self, path, e)
 
     async def _init_forwards(self):
@@ -187,14 +190,21 @@ class AndroidDevice(object):
         self._procs.append(p)
         return p
 
+    async def getprop(self, name:str) -> str:
+        value = await adb.shell(self._serial, "getprop "+name)
+        return value.strip()
+
     async def properties(self):
-        brand = await adb.shell(self._serial, "getprop ro.product.brand")
-        version = await adb.shell(self._serial, "getprop ro.build.version.release")
+        brand = await self.getprop("ro.product.brand")
+        model = await self.getprop("ro.product.model")
+        version = await self.getprop("ro.build.version.release")
 
         return {
             "serial": self._serial,
-            "brand": brand.strip(),
-            "version": version.strip(),
+            "brand": brand,
+            "version": version,
+            "model": model,
+            "name": device_names.get(model, model),
         }
 
     async def reset(self):

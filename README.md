@@ -4,6 +4,12 @@ android provider  for [atxserver2](https://github.com/openatx/atxserver2)
 ## Use with docker
 推荐用这种方式部署，命令有点长，但是部署简单
 
+如果你还没有安装docker，并且你用的是Linux，有一个很简单的命令就可以一键安装上去。
+
+```bash
+curl -fsSL https://get.docker.com | sh
+```
+
 使用dockerhub上的image(当前有Linux/amd64和Linux/arm的镜像)
 
 ```bash
@@ -69,6 +75,9 @@ $ http POST $SERVER/devices/${UDID}/cold
     "description": "Device is colding"
 }
 ```
+
+## Developers
+Read the [developers page](DEVELOP.md).
 
 ## LICENSE
 [MIT](LICENSE)
