@@ -2,4 +2,4 @@ logzero==1.5.0
 adbutils==0.1.3
 tornado
 requests
-apkutils-patch>=0.5.3
+apkutils-patch>=0.5.4
