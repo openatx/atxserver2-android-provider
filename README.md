@@ -56,7 +56,7 @@ Provider可以通过`adb track-devices`自动发现已经接入的设备，当�
 通过URL安装应用
 
 ```bash
-$ http POST $SERVER/devices/${UDID}/app/install secret=$SECRET url==http://example.com/demo.apk
+$ http POST $SERVER/app/install?udid=${UDID} secret=$SECRET url==http://example.com/demo.apk
 {
     "success": true,
     "output": "Success\r\n"
@@ -66,10 +66,10 @@ $ http POST $SERVER/devices/${UDID}/app/install secret=$SECRET url==http://examp
 之後的接口將省略掉secret
 
 ### 冷却设备
-做一些设备清理的工作
+留出时间让设备降降温，以及做一些软件清理的工作
 
 ```bash
-$ http POST $SERVER/devices/${UDID}/cold
+$ http POST $SERVER/cold?udid=${UDID}
 {
     "success": true,
     "description": "Device is colding"
