@@ -1,5 +1,5 @@
 logzero==1.5.*
-adbutils>=0.2.*
+adbutils==0.2.*
 tornado
 requests
-apkutils-patch>=0.5.*
+apkutils-patch==0.5.*
