@@ -104,7 +104,7 @@ class AppHandler(CorsMixin, tornado.web.RequestHandler):
                     "return": exit_code,
                     "output": output}
         except Exception as e:
-            return {"success": False, "description": str(e)}
+            return {"success": False, "status": 500, "description": str(e)}
         finally:
             os.unlink(apk_path)
 
@@ -114,6 +114,7 @@ class AppHandler(CorsMixin, tornado.web.RequestHandler):
         device = udid2device[udid]
         url = self.get_argument("url")
         ret = yield self.app_install(device.serial, url)
+        self.set_status(ret.get("status", 400))  # default bad request
         self.write(ret)
 
 
