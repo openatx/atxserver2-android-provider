@@ -8,5 +8,5 @@ install:
 script:
   - echo "Skip"
 after_success:
-  - docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
-  - sh build_docker_push.sh
+  - echo "$DOCKER_PASSWORD" | docker login -u $DOCKER_USERNAME --password-stdin
+  - sh build-docker-push.sh
