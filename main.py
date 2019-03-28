@@ -114,7 +114,8 @@ class AppHandler(CorsMixin, tornado.web.RequestHandler):
         device = udid2device[udid]
         url = self.get_argument("url")
         ret = yield self.app_install(device.serial, url)
-        self.set_status(ret.get("status", 400))  # default bad request
+        if not ret['success']:
+            self.set_status(ret.get("status", 400))  # default bad request
         self.write(ret)
 
 
@@ -154,7 +155,7 @@ def make_app():
     return app
 
 
-async def device_watch():
+async def device_watch(allow_remote: bool =False):
     serial2udid = {}
     udid2serial = {}
 
@@ -168,6 +169,10 @@ async def device_watch():
     async for event in adb.track_devices():
         logger.debug("%s", event)
         # udid = event.serial  # FIXME(ssx): fix later
+        if not allow_remote:
+            if re.match(r"(\d+)\.(\d+)\.(\d+)\.(\d+):(\d+)", event.serial):
+                logger.debug("Skip remote device: %s", event)
+                continue
         if event.present:
             try:
                 udid = serial2udid[event.serial] = event.serial
@@ -211,6 +216,8 @@ async def async_main():
     parser.add_argument(
         '-s', '--server', default='localhost:4000', help='server address')
     parser.add_argument(
+        "--allow-remote", action="store_true", help="allow remote connect device")
+    parser.add_argument(
         '-t', '--test', action="store_true", help="run test code")
     parser.add_argument(
         '-p', '--port', type=int, default=3500, help='listen port')
@@ -226,7 +233,7 @@ async def async_main():
     global hbconn
     hbconn = await heartbeat_connect(args.server, secret=secret, self_url=provider_url)
 
-    await device_watch()
+    await device_watch(args.allow_remote)
 
 
 async def test_asyncadb():
