@@ -181,6 +181,7 @@ async def device_watch(allow_remote: bool =False):
                 device = AndroidDevice(event.serial, partial(callback, udid))
 
                 await device.init()
+                await device.open_identify()
                 # try:
                 # except Exception as e:
                 #     logger.warning("Init device error: %s", e)
@@ -203,6 +204,7 @@ async def device_watch(allow_remote: bool =False):
             udid = serial2udid[event.serial]
             if udid in udid2device:
                 udid2device[udid].close()
+                udid2device.pop(udid, None)
 
             await hbconn.device_update({
                 "udid": udid,

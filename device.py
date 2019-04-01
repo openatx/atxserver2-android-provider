@@ -63,6 +63,9 @@ class AndroidDevice(object):
         await adb.shell(self._serial, "/data/local/tmp/atx-agent server --stop")
         await adb.shell(self._serial, "/data/local/tmp/atx-agent server --nouia -d")
 
+    async def open_identify(self):
+        await adb.shell(self._serial, "am start -n com.github.uiautomator/.IdentifyActivity -e theme black")
+
     def _init_binaries(self):
         # minitouch, minicap, minicap.so
         d = self._device
