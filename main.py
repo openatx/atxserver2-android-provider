@@ -12,9 +12,11 @@ import shutil
 import socket
 import subprocess
 import tempfile
+import time
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 
+import apkutils
 import requests
 import tornado.web
 from logzero import logger
@@ -24,9 +26,11 @@ from tornado.ioloop import IOLoop
 from tornado.web import RequestHandler
 from tornado.websocket import WebSocketHandler, websocket_connect
 
-import apkutils
+import adbutils
+import uiautomator2 as u2
+from adbutils import adb as adbclient
 from asyncadb import adb
-from device import AndroidDevice, STATUS_FAIL, STATUS_INIT, STATUS_OKAY
+from device import STATUS_FAIL, STATUS_INIT, STATUS_OKAY, AndroidDevice
 from heartbeat import heartbeat_connect
 from utils import current_ip, fix_url, id_generator, update_recursive
 
@@ -52,11 +56,67 @@ class CorsMixin(object):
         self.finish()
 
 
+class InstallError(Exception):
+    def __init__(self, stage: str, reason):
+        self.stage = stage
+        self.reason = reason
+
+
+def app_install_local(serial: str, apk_path: str, launch: bool=False) ->str:
+    """
+    install apk to device
+
+    Returns:
+        package name
+
+    Raises:
+        AdbInstallError, FileNotFoundError
+    """
+    # 解析apk文件
+    device = adbclient.device_with_serial(serial)
+    try:
+        apk = apkutils.APK(apk_path)
+    except apkutils.apkfile.BadZipFile:
+        raise InstallError("ApkParse", "Bad zip file")
+
+    # 提前将重名包卸载
+    package_name = apk.manifest.package_name
+    pkginfo = device.package_info(package_name)
+    if pkginfo:
+        logger.debug("uninstall: %s", package_name)
+        device.uninstall(package_name)
+
+    # 解锁手机，防止锁屏
+    ud = u2.connect_usb(serial)
+    ud.open_identify()
+    try:
+        # 推送到手机
+        dst = "/data/local/tmp/tmp-%d.apk" % int(time.time()*1000)
+        logger.debug("push %s %s", apk_path, dst)
+        device.sync.push(apk_path, dst)
+        logger.debug("install-remote %s", dst)
+        # 调用pm install安装
+        device.install_remote(dst)
+    except adbutils.AdbInstallError as e:
+        raise InstallError("install", e.output)
+    finally:
+        # 停止uiautomator2服务
+        logger.debug("uiautomator2 stop")
+        ud.session().press("home")
+        ud.service("uiautomator").stop()
+
+    # 启动应用
+    if launch:
+        logger.debug("launch %s", package_name)
+        device.app_start(package_name)
+    return package_name
+
+
 class AppHandler(CorsMixin, tornado.web.RequestHandler):
     executor = ThreadPoolExecutor(4)
 
     @run_on_executor(executor='executor')
-    def app_install(self, serial: str, url: str):
+    def app_install_url(self, serial: str, url: str, **kwargs):
         try:
             r = requests.get(url, stream=True)
             if r.status_code != 200:
@@ -69,6 +129,7 @@ class AppHandler(CorsMixin, tornado.web.RequestHandler):
             suffix=".apk", prefix="tmpfile-", dir=os.getcwd())
         apk_path = os.path.relpath(apk_path)
         logger.debug("temp apk path: %s", apk_path)
+
         try:
             with open(apk_path, "wb") as tfile:
                 content_length = int(r.headers.get("content-length", 0))
@@ -78,31 +139,17 @@ class AppHandler(CorsMixin, tornado.web.RequestHandler):
                 else:
                     shutil.copyfileobj(r.raw, tfile)
 
-            apk = apkutils.APK(apk_path)
-            package_name = apk.manifest and apk.manifest.package_name
-            if package_name:
-                logger.debug("package name: %s", package_name)
-                subprocess.run(
-                    ["adb", "-s", serial, "uninstall", package_name])
-            p = subprocess.Popen(["adb", "-s", serial, "install", "-r", "-t", apk_path],
-                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-            output = ""
-            for line in p.stdout:
-                line = line.decode('utf-8')
-                print(line)
-                output += line
-            success = "Success" in output
-            exit_code = p.wait()
-
-            if not success:
-                return {"success": False, "description": output}
-            if package_name:  # sometimes package_name can not retrived
-                subprocess.run(["adb", "-s", serial, "shell", "monkey", '-p',
-                                package_name, "-c", "android.intent.category.LAUNCHER", "1"])
-            return {"success": success,
-                    "packageName": package_name,
-                    "return": exit_code,
-                    "output": output}
+            pkg_name = app_install_local(serial, apk_path, **kwargs)
+            return {
+                "success": True,
+                "description": "Success",
+                "packageName": pkg_name,
+            }
+        except InstallError as e:
+            return {
+                "success": False,
+                "description": "{}: {}".format(e.stage, e.reason)
+            }
         except Exception as e:
             return {"success": False, "status": 500, "description": str(e)}
         finally:
@@ -113,7 +160,10 @@ class AppHandler(CorsMixin, tornado.web.RequestHandler):
         udid = udid or self.get_argument("udid")
         device = udid2device[udid]
         url = self.get_argument("url")
-        ret = yield self.app_install(device.serial, url)
+        launch = self.get_argument("launch", "false") in [
+            'true', 'True', 'TRUE', '1']
+
+        ret = yield self.app_install_url(device.serial, url, launch=launch)
         if not ret['success']:
             self.set_status(ret.get("status", 400))  # default bad request
         self.write(ret)
@@ -145,11 +195,7 @@ class ColdingHandler(tornado.web.RequestHandler):
 
 def make_app():
     app = tornado.web.Application([
-        (r"/devices/([^/]+)/cold", ColdingHandler),
-        (r"/devices/([^/]+)/app/install", AppHandler),
-        # POST /app/install?udid=xxxxx url==http://....
         (r"/app/install", AppHandler),
-        # POST /cold?udid=xxxxx
         (r"/cold", ColdingHandler),
     ])
     return app
@@ -182,10 +228,6 @@ async def device_watch(allow_remote: bool =False):
 
                 await device.init()
                 await device.open_identify()
-                # try:
-                # except Exception as e:
-                #     logger.warning("Init device error: %s", e)
-                #     continue
 
                 udid2device[udid] = device
 
@@ -200,6 +242,8 @@ async def device_watch(allow_remote: bool =False):
                 logger.info("Device:%s is ready", event.serial)
             except RuntimeError:
                 logger.warning("Device:%s initialize failed", event.serial)
+            except Exception as e:
+                logger.error("Unknown error: %s", e)
         else:
             udid = serial2udid[event.serial]
             if udid in udid2device:
@@ -224,6 +268,15 @@ async def async_main():
     parser.add_argument(
         '-p', '--port', type=int, default=3500, help='listen port')
     args = parser.parse_args()
+
+    if args.test:
+        for apk_name in ("cloudmusic.apk",):  # , "apkinfo.exe"):
+            apk_path = "testdata/"+apk_name
+            logger.info("Install %s", apk_path)
+        # apk_path = r"testdata/cloudmusic.apk"
+            ret = app_install_local("6EB0217704000486", apk_path, launch=True)
+            logger.info("Ret: %s", ret)
+        return
 
     # start local server
     provider_url = "http://"+current_ip() + ":" + str(args.port)
