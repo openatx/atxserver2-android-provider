@@ -2,6 +2,8 @@
 # coding: utf-8
 #
 
+import glob
+import hashlib
 import argparse
 import collections
 import json
@@ -62,7 +64,7 @@ class InstallError(Exception):
         self.reason = reason
 
 
-def app_install_local(serial: str, apk_path: str, launch: bool=False) ->str:
+def app_install_local(serial: str, apk_path: str, launch: bool = False) ->str:
     """
     install apk to device
 
@@ -113,60 +115,73 @@ def app_install_local(serial: str, apk_path: str, launch: bool=False) ->str:
 
 
 class AppHandler(CorsMixin, tornado.web.RequestHandler):
-    executor = ThreadPoolExecutor(4)
+    _install_executor = ThreadPoolExecutor(4)
+    _download_executor = ThreadPoolExecutor(1)
 
-    @run_on_executor(executor='executor')
-    def app_install_url(self, serial: str, url: str, **kwargs):
-        try:
-            r = requests.get(url, stream=True)
-            if r.status_code != 200:
-                return {"success": False, "description": r.reason}
-        except Exception as e:
-            return {"success": False, "description": str(e)}
+    def cache_filepath(self, text: str) ->str:
+        m = hashlib.md5()
+        m.update(text.encode('utf-8'))
+        return "cache-"+m.hexdigest()
 
-        # Windows not support tempfile.NamedTemporyFile
-        apk_path = tempfile.mktemp(
-            suffix=".apk", prefix="tmpfile-", dir=os.getcwd())
-        apk_path = os.path.relpath(apk_path)
-        logger.debug("temp apk path: %s", apk_path)
+    @run_on_executor(executor="_download_executor")
+    def cache_download(self, url: str) -> str:
+        """ download with local cache """
+        target_path = self.cache_filepath(url)
+        logger.debug("Download %s to %s", url, target_path)
 
-        try:
-            with open(apk_path, "wb") as tfile:
-                content_length = int(r.headers.get("content-length", 0))
-                if content_length:
-                    for chunk in r.iter_content(chunk_size=40960):
-                        tfile.write(chunk)
-                else:
-                    shutil.copyfileobj(r.raw, tfile)
+        if os.path.exists(target_path):
+            logger.debug("Cache hited")
+            return target_path
 
-            pkg_name = app_install_local(serial, apk_path, **kwargs)
-            return {
-                "success": True,
-                "description": "Success",
-                "packageName": pkg_name,
-            }
-        except InstallError as e:
-            return {
-                "success": False,
-                "description": "{}: {}".format(e.stage, e.reason)
-            }
-        except Exception as e:
-            return {"success": False, "status": 500, "description": str(e)}
-        finally:
-            os.unlink(apk_path)
+        # TODO: remove last
+        for fname in glob.glob("cache-*"):
+            logger.debug("Remove old cache: %s", fname)
+            os.unlink(fname)
 
-    @gen.coroutine
-    def post(self, udid=None):
+        tmp_path = target_path + ".tmp"
+        r = requests.get(url, stream=True)
+        r.raise_for_status()
+
+        with open(tmp_path, "wb") as tfile:
+            content_length = int(r.headers.get("content-length", 0))
+            if content_length:
+                for chunk in r.iter_content(chunk_size=40960):
+                    tfile.write(chunk)
+            else:
+                shutil.copyfileobj(r.raw, tfile)
+
+        os.rename(tmp_path, target_path)
+        return target_path
+
+    @run_on_executor(executor='_install_executor')
+    def app_install_url(self, serial: str, apk_path: str, **kwargs):
+        pkg_name = app_install_local(serial, apk_path, **kwargs)
+        return {
+            "success": True,
+            "description": "Success",
+            "packageName": pkg_name,
+        }
+
+    async def post(self, udid=None):
         udid = udid or self.get_argument("udid")
         device = udid2device[udid]
         url = self.get_argument("url")
         launch = self.get_argument("launch", "false") in [
             'true', 'True', 'TRUE', '1']
 
-        ret = yield self.app_install_url(device.serial, url, launch=launch)
-        if not ret['success']:
-            self.set_status(ret.get("status", 400))  # default bad request
-        self.write(ret)
+        try:
+            apk_path = await self.cache_download(url)
+            ret = await self.app_install_url(device.serial, apk_path, launch=launch)
+            self.write(ret)
+        except InstallError as e:
+            self.set_status(400)
+            return {
+                "success": False,
+                "description": "{}: {}".format(e.stage, e.reason)
+            }
+        except Exception as e:
+            self.set_status(500)
+            self.write(str(e))
 
 
 class ColdingHandler(tornado.web.RequestHandler):
@@ -201,7 +216,7 @@ def make_app():
     return app
 
 
-async def device_watch(allow_remote: bool =False):
+async def device_watch(allow_remote: bool = False):
     serial2udid = {}
     udid2serial = {}
 

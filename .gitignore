@@ -113,7 +113,7 @@ venv.bak/
 .dmypy.json
 dmypy.json
 testdata/
-
+cache-*
 
 # Pyre type checker
 .pyre/
