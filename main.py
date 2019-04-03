@@ -87,8 +87,8 @@ def app_install_local(serial: str, apk_path: str, launch: bool=False) ->str:
         device.uninstall(package_name)
 
     # 解锁手机，防止锁屏
-    ud = u2.connect_usb(serial)
-    ud.open_identify()
+    # ud = u2.connect_usb(serial)
+    # ud.open_identify()
     try:
         # 推送到手机
         dst = "/data/local/tmp/tmp-%d.apk" % int(time.time()*1000)
@@ -102,8 +102,8 @@ def app_install_local(serial: str, apk_path: str, launch: bool=False) ->str:
     finally:
         # 停止uiautomator2服务
         logger.debug("uiautomator2 stop")
-        ud.session().press("home")
-        ud.service("uiautomator").stop()
+        # ud.session().press("home")
+        # ud.service("uiautomator").stop()
 
     # 启动应用
     if launch:
