@@ -1,12 +1,13 @@
 FROM python:3
 
-RUN sh install-adb.sh
-
 RUN curl -sL https://deb.nodesource.com/setup_11.x | bash -
 RUN apt-get install -y nodejs
 
 ADD . /app
 WORKDIR /app
+
+RUN sh install-adb.sh
+
 RUN npm install
 RUN pip install -r requirements.txt
 

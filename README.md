@@ -16,7 +16,7 @@ curl -fsSL https://get.docker.com | sh
 IMAGE="codeskyblue/atxserver2-android-provider"
 SERVER_URL="http://10.0.0.1:4000" # 这个修改成自己的atxserver2地址
 docker pull $IMAGE
-docker run -it --rm --privileged -v /dev/bus/usb:/dev/bus/usb --net host \
+docker run --rm --privileged -v /dev/bus/usb:/dev/bus/usb --net host \
     ${IMAGE} python main.py --server ${SERVER_URL}
 ```
 

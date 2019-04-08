@@ -20,5 +20,13 @@ case "$(uname -m)" in
         ;;
 esac
 
-cp vendor/multios-adbs/$TAG/adb /usr/local/bin/adb
-chmod +x /usr/local/bin/adb
+cp vendor/multios-adbs/$TAG/adb /usr/local/bin/adb-tmp
+chmod +x /usr/local/bin/adb-tmp
+mv /usr/local/bin/adb-tmp /usr/local/bin/adb
+
+if ! test -d /root/.android
+then
+    mkdir -m 0750 /root/.android
+fi
+cp vendor/multios-adbs/keys/adbkey /root/.android/adbkey
+cp vendor/multios-adbs/keys/adbkey.pub /root/.android/adbkey.pub
