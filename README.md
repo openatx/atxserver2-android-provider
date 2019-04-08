@@ -22,8 +22,22 @@ docker run -it --rm --privileged -v /dev/bus/usb:/dev/bus/usb --net host \
 
 手动 docker build (依赖git-lfs)
 
+安装`git-lfs`
+
 ```bash
-git lfs clone https://github.com/openatx/atxserver2-android-provider
+# mac
+brew install git-lfs
+
+# linux(Debian, ubuntu)
+sudo apt-get install git-lfs
+```
+
+编译代码
+```bash
+git clone https://github.com/openatx/atxserver2-android-provider
+# High version of git can the following command automatically
+# git lfs install && git lfs pull
+
 cd atxserver2-android-provider
 docker build -t atx2android .
 docker run -it --rm --privileged -v /dev/bus/usb:/dev/bus/usb --net host atx2android python main.py --server localhost:4000
