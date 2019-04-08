@@ -1,2 +1,4 @@
 *.zip filter=lfs diff=lfs merge=lfs -text
 *.apk filter=lfs diff=lfs merge=lfs -text
+./vendor/multios-adbs/ filter=lfs diff=lfs merge=lfs -text
+adb filter=lfs diff=lfs merge=lfs -text

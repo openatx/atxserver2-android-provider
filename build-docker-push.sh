@@ -8,7 +8,7 @@ case "$(uname -m)" in
     x86_64)
         TAG="linux"
         ;;
-    armv7l)
+    armv*l)
         TAG="raspberry"
         ;;
     *)
