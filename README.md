@@ -1,7 +1,7 @@
 # atxserver2-android-provider
 android provider  for [atxserver2](https://github.com/openatx/atxserver2)
 
-## Use with docker
+## Install with docker
 推荐用这种方式部署，命令有点长，但是部署简单
 
 如果你还没有安装docker，并且你用的是Linux，有一个很简单的命令就可以一键安装上去。
@@ -22,28 +22,29 @@ docker run --rm --privileged -v /dev/bus/usb:/dev/bus/usb --net host \
 
 手动 docker build (依赖git-lfs)
 
-安装`git-lfs`
+安装`git`, `git-lfs`
 
 ```bash
 # mac
-brew install git-lfs
+brew install git git-lfs
 
 # linux(Debian, ubuntu)
-sudo apt-get install git-lfs
+sudo apt-get install git git-lfs
 ```
 
 编译代码
 ```bash
 git clone https://github.com/openatx/atxserver2-android-provider
-# High version of git can the following command automatically
-# git lfs install && git lfs pull
-
 cd atxserver2-android-provider
+
+# High version of git may do the following command automatically
+git lfs install && git lfs pull
+
 docker build -t atx2android .
 docker run -it --rm --privileged -v /dev/bus/usb:/dev/bus/usb --net host atx2android python main.py --server localhost:4000
 ```
 
-## Use from source
+## Install from source
 依赖 `Python3.6+`, `NodeJS`, `Git-LFS`
 
 注意下面的命令是**git lfs clone** 而不是 `git clone`
