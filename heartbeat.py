@@ -1,6 +1,7 @@
 # coding: utf-8
 #
 # updated: 2019/03/13
+# updated: 2019/04/11 codeskyblue: add owner
 
 
 import json
@@ -16,11 +17,18 @@ from tornado import gen
 from utils import update_recursive, current_ip
 
 
-async def heartbeat_connect(server_url: str, self_url: str="", secret: str="", platform: str="android", priority: int=2):
+async def heartbeat_connect(
+        server_url: str,
+        self_url: str="",
+        secret: str="",
+        platform: str="android",
+        priority: int=2,
+        **kwargs):
     addr = server_url.replace("http://", "").replace("/", "")
     url = "ws://" + addr + "/websocket/heartbeat"
+
     hbc = HeartbeatConnection(
-        url, secret, platform=platform, priority=priority)
+        url, secret, platform=platform, priority=priority, **kwargs)
     hbc._provider_url = self_url
     await hbc.open()
     return hbc
@@ -42,11 +50,12 @@ class HeartbeatConnection(object):
                  url="ws://localhost:4000/websocket/heartbeat",
                  secret='',
                  platform='android',
-                 priority=2):
-        self._ws_url = url
+                 priority=2,
+                 owner=None):
+        self._server_ws_url = url
         self._provider_url = None
         self._name = "pyclient"
-        self._owner = "nobody@nobody.io"
+        self._owner = owner
         self._secret = secret
 
         self._platform = platform
@@ -114,7 +123,7 @@ class HeartbeatConnection(object):
                 await gen.sleep(cnt + 1)
 
     async def _connect(self):
-        ws = await websocket.websocket_connect(self._ws_url)
+        ws = await websocket.websocket_connect(self._server_ws_url)
         ws.__class__ = SafeWebSocket
 
         await ws.write_message({

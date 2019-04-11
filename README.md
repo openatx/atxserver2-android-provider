@@ -68,6 +68,7 @@ Provider可以通过`adb track-devices`自动发现已经接入的设备，当�
 - `--port` 本地监听的端口号
 - `--server` atxserver2的地址，默认`localhost:4000`
 - `--allow-remote` 允许远程设备，默认会忽略类似`10.0.0.1:5555`的设备
+- `--owner`, 邮箱地址，如果设置了，默认连接的设备都为私有设备，只有owner或管理员账号能看到
 
 ## Provider提供的接口（繁體字好漂亮）
 主要有兩個接口，冷卻設備和安裝應用。

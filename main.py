@@ -223,9 +223,6 @@ async def device_watch(allow_remote: bool = False):
     def callback(udid: str, status: str):
         if status == STATUS_OKAY:
             print("Good")
-        else:
-            print("--Status", status)
-        pass
 
     async for event in adb.track_devices():
         logger.debug("%s", event)
@@ -284,7 +281,16 @@ async def async_main():
         '-t', '--test', action="store_true", help="run test code")
     parser.add_argument(
         '-p', '--port', type=int, default=3500, help='listen port')
+    parser.add_argument("--owner", type=str, help="provider owner email")
+    parser.add_argument(
+        "--owner-file", type=argparse.FileType("r"), help="provider owner email from file")
     args = parser.parse_args()
+
+    owner_email = args.owner
+    if args.owner_file:
+        with args.owner_file as file:
+            owner_email = file.read().strip()
+    logger.info("Owner: %s", owner_email)
 
     if args.test:
         for apk_name in ("cloudmusic.apk",):  # , "apkinfo.exe"):
@@ -303,7 +309,7 @@ async def async_main():
 
     # connect to atxserver2
     global hbconn
-    hbconn = await heartbeat_connect(args.server, secret=secret, self_url=provider_url)
+    hbconn = await heartbeat_connect(args.server, secret=secret, self_url=provider_url, owner=owner_email)
 
     await device_watch(args.allow_remote)
 
