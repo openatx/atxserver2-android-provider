@@ -259,6 +259,8 @@ async def device_watch(allow_remote: bool = False):
                 logger.warning("Device:%s initialize failed", event.serial)
             except Exception as e:
                 logger.error("Unknown error: %s", e)
+                import traceback
+                traceback.print_exc()
         else:
             udid = serial2udid[event.serial]
             if udid in udid2device:
