@@ -175,10 +175,10 @@ class AppHandler(CorsMixin, tornado.web.RequestHandler):
             self.write(ret)
         except InstallError as e:
             self.set_status(400)
-            return {
+            self.write({
                 "success": False,
                 "description": "{}: {}".format(e.stage, e.reason)
-            }
+            })
         except Exception as e:
             self.set_status(500)
             self.write(str(e))
