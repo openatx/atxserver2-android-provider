@@ -59,6 +59,8 @@ python3 main.py --server localhost:4000
 
 Provider可以通过`adb track-devices`自动发现已经接入的设备，当手机接入到电脑上时，会自动给手机安装`minicap`, `minitouch`, `atx-agent`, `app-uiautomator-[test].apk`, `whatsinput-apk`
 
+接入的设备需要配置好`开发者选项`, 不同设备的设置方案放到了该项目的[Issue中, tag: `device-settings`](https://github.com/openatx/atxserver2-android-provider/issues?q=is%3Aissue+is%3Aopen+label%3Adevice-settings) 如果没有该机型，可以自助添加
+
 ### 命令行参数
 
 - `--port` 本地监听的端口号
