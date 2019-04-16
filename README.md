@@ -2,6 +2,8 @@
 android provider  for [atxserver2](https://github.com/openatx/atxserver2)
 
 ## Install with docker
+仅限`Linux`系统，Mac，Windows除外
+
 推荐用这种方式部署，命令有点长，但是部署简单
 
 如果你还没有安装docker，并且你用的是Linux，有一个很简单的命令就可以一键安装上去。
@@ -20,41 +22,35 @@ docker run --rm --privileged -v /dev/bus/usb:/dev/bus/usb --net host \
     ${IMAGE} python main.py --server ${SERVER_URL}
 ```
 
-手动 docker build (依赖git-lfs)
-
-安装`git`, `git-lfs`
-
-```bash
-# mac
-brew install git git-lfs
-
-# linux(Debian, ubuntu)
-sudo apt-get install git git-lfs
-```
-
-编译代码
-```bash
-git clone https://github.com/openatx/atxserver2-android-provider
-cd atxserver2-android-provider
-
-# High version of git may do the following command automatically
-git lfs install && git lfs pull
-
-docker build -t atx2android .
-docker run -it --rm --privileged -v /dev/bus/usb:/dev/bus/usb --net host atx2android python main.py --server localhost:4000
-```
-
-## Install from source
+## Install from source (Mac, Windows推荐)
 依赖 `Python3.6+`, `NodeJS`, `Git-LFS`
 
-注意下面的命令是**git lfs clone** 而不是 `git clone`
+Install git-lfs
 
 ```bash
-git lfs clone https://github.com/openatx/atxserver2-android-provider
+# Mac
+brew install git-lfs
+
+# Windows
+# See https://git-lfs.github.com/
+```
+
+Clone代码到本地
+
+```bash
+git clone https://github.com/openatx/atxserver2-android-provider
+git lfs install
+git lfs pull
 cd atxserver2-android-provider
 
 # 安装依赖
 npm install
+
+# 准备Python虚拟环境（可选）
+python3 -m venv venv
+. venv/bin/activate
+# venv/Scripts/activate.bat  # for windows
+
 pip install -r requirements.txt
 
 # 启动，需要指定atxserver2的地址, 假设地址为 http://localhost:4000
