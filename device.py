@@ -139,7 +139,7 @@ class AndroidDevice(object):
         logger.debug("%s adbkit start, port %d", self, port)
 
         self.run_background([
-            'node', 'node_modules/adbkit/bin/adbkit',
+            'node', 'node_modules/adbkit2/bin/adbkit',
             'usb-device-to-tcp', '-p', str(self._adb_remote_port), self._serial], silent=True)
 
     def addrs(self):

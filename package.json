@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "adbkit": "github:codeskyblue/adbkit#fix-adb40",
+    "adbkit2": "^2.11.1",
     "commander": "^2.19.0"
   }
 }
