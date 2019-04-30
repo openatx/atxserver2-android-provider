@@ -39,9 +39,9 @@ Clone代码到本地
 
 ```bash
 git clone https://github.com/openatx/atxserver2-android-provider
+cd atxserver2-android-provider
 git lfs install
 git lfs pull
-cd atxserver2-android-provider
 
 # 安装依赖
 npm install
