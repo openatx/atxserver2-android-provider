@@ -15,10 +15,9 @@ docker login
 
 # 构建镜像
 git clone https://github.com/openatx/atxserver2-android-provider
+cd atxserver2-android-provider
 git lfs install
 git lfs pull
-
-cd atxserver2-android-provider
 
 IMAGE="codeskyblue/atxserver2-android-provider:raspberry"
 docker build -t $IMAGE .
