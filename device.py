@@ -71,10 +71,10 @@ class AndroidDevice(object):
         d = self._device
         sdk = d.getprop("ro.build.version.sdk")  # eg 26
         abi = d.getprop('ro.product.cpu.abi')  # eg arm64-v8a
-        pre = d.getprop('ro.build.version.preview_sdk')  # eg 0
         abis = (d.getprop('ro.product.cpu.abilist').strip() or abi).split(",")
-        if pre and pre != "0":
-            sdk = sdk + pre
+        #pre = d.getprop('ro.build.version.preview_sdk')  # eg 0
+        #if pre and pre != "0":
+        #    sdk = sdk + pre
 
         logger.debug("%s sdk: %s, abi: %s, abis: %s", self, sdk, abi, abis)
 
