@@ -2,10 +2,10 @@
 # coding: utf-8
 #
 
-import glob
-import hashlib
 import argparse
 import collections
+import glob
+import hashlib
 import json
 import os
 import pprint
@@ -13,14 +13,18 @@ import re
 import shutil
 import socket
 import subprocess
+import sys
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 
+import adbutils
 import apkutils
 import requests
 import tornado.web
+import uiautomator2 as u2
+from adbutils import adb as adbclient
 from logzero import logger
 from tornado import gen, websocket
 from tornado.concurrent import run_on_executor
@@ -28,14 +32,12 @@ from tornado.ioloop import IOLoop
 from tornado.web import RequestHandler
 from tornado.websocket import WebSocketHandler, websocket_connect
 
-import adbutils
-import uiautomator2 as u2
-from adbutils import adb as adbclient
 from asyncadb import adb
 from device import STATUS_FAIL, STATUS_INIT, STATUS_OKAY, AndroidDevice
 from heartbeat import heartbeat_connect
 from utils import current_ip, fix_url, id_generator, update_recursive
 
+__curdir__ = os.path.dirname(os.path.abspath(__file__))
 hbconn = None
 udid2device = {}
 secret = id_generator(10)
@@ -64,7 +66,7 @@ class InstallError(Exception):
         self.reason = reason
 
 
-def app_install_local(serial: str, apk_path: str, launch: bool = False) ->str:
+def app_install_local(serial: str, apk_path: str, launch: bool = False) -> str:
     """
     install apk to device
 
@@ -93,7 +95,7 @@ def app_install_local(serial: str, apk_path: str, launch: bool = False) ->str:
     # ud.open_identify()
     try:
         # 推送到手机
-        dst = "/data/local/tmp/tmp-%d.apk" % int(time.time()*1000)
+        dst = "/data/local/tmp/tmp-%d.apk" % int(time.time() * 1000)
         logger.debug("push %s %s", apk_path, dst)
         device.sync.push(apk_path, dst)
         logger.debug("install-remote %s", dst)
@@ -118,10 +120,10 @@ class AppHandler(CorsMixin, tornado.web.RequestHandler):
     _install_executor = ThreadPoolExecutor(4)
     _download_executor = ThreadPoolExecutor(1)
 
-    def cache_filepath(self, text: str) ->str:
+    def cache_filepath(self, text: str) -> str:
         m = hashlib.md5()
         m.update(text.encode('utf-8'))
-        return "cache-"+m.hexdigest()
+        return "cache-" + m.hexdigest()
 
     @run_on_executor(executor="_download_executor")
     def cache_download(self, url: str) -> str:
@@ -166,12 +168,14 @@ class AppHandler(CorsMixin, tornado.web.RequestHandler):
         udid = udid or self.get_argument("udid")
         device = udid2device[udid]
         url = self.get_argument("url")
-        launch = self.get_argument("launch", "false") in [
-            'true', 'True', 'TRUE', '1']
+        launch = self.get_argument("launch",
+                                   "false") in ['true', 'True', 'TRUE', '1']
 
         try:
             apk_path = await self.cache_download(url)
-            ret = await self.app_install_url(device.serial, apk_path, launch=launch)
+            ret = await self.app_install_url(device.serial,
+                                             apk_path,
+                                             launch=launch)
             self.write(ret)
         except InstallError as e:
             self.set_status(400)
@@ -191,8 +195,8 @@ class ColdingHandler(tornado.web.RequestHandler):
         logger.info("Receive colding request for %s", udid)
         request_secret = self.get_argument("secret")
         if secret != request_secret:
-            logger.warning("secret not match, expect %s, got %s",
-                           secret, request_secret)
+            logger.warning("secret not match, expect %s, got %s", secret,
+                           request_secret)
             return
 
         if udid not in udid2device:
@@ -250,7 +254,7 @@ async def device_watch(allow_remote: bool = False):
                     "colding": False,
                     "provider": device.addrs(),
                     "properties": await device.properties(),
-                })
+                }) # yapf: disable
                 logger.info("Device:%s is ready", event.serial)
             except RuntimeError:
                 logger.warning("Device:%s initialize failed", event.serial)
@@ -273,17 +277,26 @@ async def device_watch(allow_remote: bool = False):
 async def async_main():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument(
-        '-s', '--server', default='localhost:4000', help='server address')
-    parser.add_argument(
-        "--allow-remote", action="store_true", help="allow remote connect device")
-    parser.add_argument(
-        '-t', '--test', action="store_true", help="run test code")
-    parser.add_argument(
-        '-p', '--port', type=int, default=3500, help='listen port')
+    parser.add_argument('-s',
+                        '--server',
+                        default='localhost:4000',
+                        help='server address')
+    parser.add_argument("--allow-remote",
+                        action="store_true",
+                        help="allow remote connect device")
+    parser.add_argument('-t',
+                        '--test',
+                        action="store_true",
+                        help="run test code")
+    parser.add_argument('-p',
+                        '--port',
+                        type=int,
+                        default=3500,
+                        help='listen port')
     parser.add_argument("--owner", type=str, help="provider owner email")
-    parser.add_argument(
-        "--owner-file", type=argparse.FileType("r"), help="provider owner email from file")
+    parser.add_argument("--owner-file",
+                        type=argparse.FileType("r"),
+                        help="provider owner email from file")
     args = parser.parse_args()
 
     owner_email = args.owner
@@ -293,23 +306,26 @@ async def async_main():
     logger.info("Owner: %s", owner_email)
 
     if args.test:
-        for apk_name in ("cloudmusic.apk",):  # , "apkinfo.exe"):
-            apk_path = "testdata/"+apk_name
+        for apk_name in ("cloudmusic.apk", ):  # , "apkinfo.exe"):
+            apk_path = "testdata/" + apk_name
             logger.info("Install %s", apk_path)
-        # apk_path = r"testdata/cloudmusic.apk"
+            # apk_path = r"testdata/cloudmusic.apk"
             ret = app_install_local("6EB0217704000486", apk_path, launch=True)
             logger.info("Ret: %s", ret)
         return
 
     # start local server
-    provider_url = "http://"+current_ip() + ":" + str(args.port)
+    provider_url = "http://" + current_ip() + ":" + str(args.port)
     app = make_app()
     app.listen(args.port)
     logger.info("ProviderURL: %s", provider_url)
 
     # connect to atxserver2
     global hbconn
-    hbconn = await heartbeat_connect(args.server, secret=secret, self_url=provider_url, owner=owner_email)
+    hbconn = await heartbeat_connect(args.server,
+                                     secret=secret,
+                                     self_url=provider_url,
+                                     owner=owner_email)
 
     await device_watch(args.allow_remote)
 
@@ -329,6 +345,10 @@ async def test_asyncadb():
 
 
 if __name__ == '__main__':
+    if os.path.getsize(os.path.join(__curdir__,
+                                    "vendor/app-uiautomator.apk")) < 1000:
+        sys.exit("Did you forget run\n\tgit lfs install\n\tgit lfs pull")
+
     try:
         IOLoop.current().run_sync(async_main)
     except KeyboardInterrupt:
