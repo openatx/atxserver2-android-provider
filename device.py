@@ -33,7 +33,7 @@ class AndroidDevice(object):
         self._serial = serial
         self._procs = []
         self._current_ip = current_ip()
-        self._device = adbclient.device_with_serial(serial)
+        self._device = adbclient.device(serial)
         self._callback = callback
 
     def __repr__(self):

@@ -19,12 +19,9 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 
-import adbutils
 import apkutils
 import requests
 import tornado.web
-import uiautomator2 as u2
-from adbutils import adb as adbclient
 from logzero import logger
 from tornado import gen, websocket
 from tornado.concurrent import run_on_executor
@@ -32,6 +29,8 @@ from tornado.ioloop import IOLoop
 from tornado.web import RequestHandler
 from tornado.websocket import WebSocketHandler, websocket_connect
 
+import adbutils
+from adbutils import adb as adbclient
 from asyncadb import adb
 from device import STATUS_FAIL, STATUS_INIT, STATUS_OKAY, AndroidDevice
 from heartbeat import heartbeat_connect
@@ -77,7 +76,7 @@ def app_install_local(serial: str, apk_path: str, launch: bool = False) -> str:
         AdbInstallError, FileNotFoundError
     """
     # 解析apk文件
-    device = adbclient.device_with_serial(serial)
+    device = adbclient.device(serial)
     try:
         apk = apkutils.APK(apk_path)
     except apkutils.apkfile.BadZipFile:
@@ -101,13 +100,13 @@ def app_install_local(serial: str, apk_path: str, launch: bool = False) -> str:
         logger.debug("install-remote %s", dst)
         # 调用pm install安装
         device.install_remote(dst)
-    except adbutils.AdbInstallError as e:
+    except adbutils.errors.AdbInstallError as e:
         raise InstallError("install", e.output)
-    finally:
-        # 停止uiautomator2服务
-        logger.debug("uiautomator2 stop")
-        # ud.session().press("home")
-        # ud.service("uiautomator").stop()
+    # finally:
+    # 停止uiautomator2服务
+    # logger.debug("uiautomator2 stop")
+    # ud.session().press("home")
+    # ud.service("uiautomator").stop()
 
     # 启动应用
     if launch:
