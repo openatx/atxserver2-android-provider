@@ -13,6 +13,7 @@ from asyncadb import adb
 from device_names import device_names
 from freeport import freeport
 from utils import current_ip
+from utils import current_ip_network
 
 
 STATUS_INIT = "init"
@@ -33,6 +34,7 @@ class AndroidDevice(object):
         self._serial = serial
         self._procs = []
         self._current_ip = current_ip()
+        self._current_ip_network = current_ip_network()
         self._device = adbclient.device(serial)
         self._callback = callback
 
@@ -150,6 +152,7 @@ class AndroidDevice(object):
             "atxAgentAddress": port2addr(self._atx_proxy_port),
             "remoteConnectAddress": port2addr(self._adb_remote_port),
             "whatsInputAddress": port2addr(self._whatsinput_port),
+            "remoteConnectAddressNetwork": self._current_ip_network
         }
 
     def adb_call(self, *args):

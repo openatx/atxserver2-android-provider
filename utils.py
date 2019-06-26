@@ -6,7 +6,7 @@ import random
 import re
 import socket
 import string
-
+import netifaces
 
 def current_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -15,6 +15,28 @@ def current_ip():
     s.close()
     return ip
 
+def current_ip_network():
+    def calc_network(netmask):
+        result = ""
+        for num in netmask.split('.'):
+            temp = str(bin(int(num)))[2:]
+            result += temp
+        return str(len([n for n in result if n != '0']))
+
+    machine_nick_name = netifaces.gateways()['default'][netifaces.AF_INET][1]
+    match_info = [netifaces.ifaddresses(interface)[netifaces.AF_INET] for interface in netifaces.interfaces() if interface == machine_nick_name]
+    ip = current_ip()
+    ip_and_network = ip + '/' + 'unknow'
+    # normally, if will match
+    if match_info:
+        try:
+            # addr = match_info[0][0]['addr']
+            netmask = match_info[0][0]['netmask']
+            net = calc_network(netmask)
+            ip_and_network = ip + '/' + net
+        except Exception as e:
+            pass
+    return ip_and_network
 
 def update_recursive(d: dict, u: dict) -> dict:
     for k, v in u.items():
