@@ -23,7 +23,9 @@ docker run --rm --privileged -v /dev/bus/usb:/dev/bus/usb --net host \
 ```
 
 ## Install from source (Mac, Windows推荐)
-依赖 `Python3.6+`, `NodeJS`, `Git-LFS`
+依赖 `Python3.6+`, `NodeJS 8`, `Git-LFS`
+
+**NodeJS**版本太高了也不行，一定要NodeJS 8，推荐使用[nvm](https://github.com/nvm-sh/nvm)管理node版本
 
 Install git-lfs
 
