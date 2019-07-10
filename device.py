@@ -109,6 +109,9 @@ class AndroidDevice(object):
                 logger.warning("stf stuff %s not found", path)
                 return
             with z.open(path) as f:
+                info = z.getinfo(path)
+                if info.file_size == self._device.sync.stat(dest).size:
+                    return
                 self._device.sync.push(f, dest, mode)
 
     def _init_apks(self):
