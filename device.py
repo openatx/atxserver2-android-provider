@@ -72,8 +72,8 @@ class AndroidDevice(object):
         sdk = d.getprop("ro.build.version.sdk")  # eg 26
         abi = d.getprop('ro.product.cpu.abi')  # eg arm64-v8a
         abis = (d.getprop('ro.product.cpu.abilist').strip() or abi).split(",")
-        #pre = d.getprop('ro.build.version.preview_sdk')  # eg 0
-        #if pre and pre != "0":
+        # pre = d.getprop('ro.build.version.preview_sdk')  # eg 0
+        # if pre and pre != "0":
         #    sdk = sdk + pre
 
         logger.debug("%s sdk: %s, abi: %s, abis: %s", self, sdk, abi, abis)
@@ -102,16 +102,15 @@ class AndroidDevice(object):
                        zipfile_path="vendor/atx-agent-latest.zip")
 
     def _push_stf(self, path: str, dest: str, mode=0o755,
-                  zipfile_path: str ="vendor/stf-binaries-master.zip"):
+                  zipfile_path: str = "vendor/stf-binaries-master.zip"):
         """ push minicap and minitouch from zip """
         with zipfile.ZipFile(zipfile_path) as z:
             if path not in z.namelist():
                 logger.warning("stf stuff %s not found", path)
                 return
+            if z.getinfo(path).file_size == self._device.sync.stat(dest).size:
+                return
             with z.open(path) as f:
-                info = z.getinfo(path)
-                if info.file_size == self._device.sync.stat(dest).size:
-                    return
                 self._device.sync.push(f, dest, mode)
 
     def _init_apks(self):
