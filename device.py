@@ -108,7 +108,10 @@ class AndroidDevice(object):
             if path not in z.namelist():
                 logger.warning("stf stuff %s not found", path)
                 return
-            if z.getinfo(path).file_size == self._device.sync.stat(dest).size:
+            src_info = z.getinfo(path)
+            dest_info = self._device.sync.stat(dest)
+            if dest_info.size == src_info.file_size and dest_info.mode >= mode:
+                logger.debug("%s already pushed %s", self, path)
                 return
             with z.open(path) as f:
                 self._device.sync.push(f, dest, mode)
