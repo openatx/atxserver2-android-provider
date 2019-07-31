@@ -19,9 +19,12 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 
+import adbutils
 import apkutils
 import requests
 import tornado.web
+import uiautomator2 as u2
+from adbutils import adb as adbclient
 from logzero import logger
 from tornado import gen, websocket
 from tornado.concurrent import run_on_executor
@@ -29,8 +32,6 @@ from tornado.ioloop import IOLoop
 from tornado.web import RequestHandler
 from tornado.websocket import WebSocketHandler, websocket_connect
 
-import adbutils
-from adbutils import adb as adbclient
 from asyncadb import adb
 from device import STATUS_FAIL, STATUS_INIT, STATUS_OKAY, AndroidDevice
 from heartbeat import heartbeat_connect
@@ -76,7 +77,7 @@ def app_install_local(serial: str, apk_path: str, launch: bool = False) -> str:
         AdbInstallError, FileNotFoundError
     """
     # 解析apk文件
-    device = adbclient.device(serial)
+    device = adbclient.device_with_serial(serial)
     try:
         apk = apkutils.APK(apk_path)
     except apkutils.apkfile.BadZipFile:
@@ -100,13 +101,13 @@ def app_install_local(serial: str, apk_path: str, launch: bool = False) -> str:
         logger.debug("install-remote %s", dst)
         # 调用pm install安装
         device.install_remote(dst)
-    except adbutils.errors.AdbInstallError as e:
+    except adbutils.AdbInstallError as e:
         raise InstallError("install", e.output)
-    # finally:
-    # 停止uiautomator2服务
-    # logger.debug("uiautomator2 stop")
-    # ud.session().press("home")
-    # ud.service("uiautomator").stop()
+    finally:
+        # 停止uiautomator2服务
+        logger.debug("uiautomator2 stop")
+        # ud.session().press("home")
+        # ud.service("uiautomator").stop()
 
     # 启动应用
     if launch:
@@ -130,9 +131,17 @@ class AppHandler(CorsMixin, tornado.web.RequestHandler):
         target_path = self.cache_filepath(url)
         logger.debug("Download %s to %s", url, target_path)
 
+        resourcename=url.split("/")[-1]
+        suffix=resourcename.split(".")[-1]
+
+
+
+
+
+
         if os.path.exists(target_path):
             logger.debug("Cache hited")
-            return target_path
+            return target_path,resourcename
 
         # TODO: remove last
         for fname in glob.glob("cache-*"):
@@ -143,6 +152,7 @@ class AppHandler(CorsMixin, tornado.web.RequestHandler):
         r = requests.get(url, stream=True)
         r.raise_for_status()
 
+
         with open(tmp_path, "wb") as tfile:
             content_length = int(r.headers.get("content-length", 0))
             if content_length:
@@ -152,7 +162,8 @@ class AppHandler(CorsMixin, tornado.web.RequestHandler):
                 shutil.copyfileobj(r.raw, tfile)
 
         os.rename(tmp_path, target_path)
-        return target_path
+
+        return target_path,resourcename
 
     @run_on_executor(executor='_install_executor')
     def app_install_url(self, serial: str, apk_path: str, **kwargs):
@@ -171,7 +182,24 @@ class AppHandler(CorsMixin, tornado.web.RequestHandler):
                                    "false") in ['true', 'True', 'TRUE', '1']
 
         try:
-            apk_path = await self.cache_download(url)
+            #推送手机操作
+            apk_path,rname = await self.cache_download(url)
+
+
+            if(not "apk" in rname):
+
+                re=os.popen("adb -s " + device.serial + " push "+apk_path+" sdcard/"+rname).read()
+
+
+                #self.set_status(200,"very good")
+                self.write("文件已发送到SD卡根目录\n "+str(re))
+
+
+
+
+
+
+
             ret = await self.app_install_url(device.serial,
                                              apk_path,
                                              launch=launch)
@@ -184,7 +212,14 @@ class AppHandler(CorsMixin, tornado.web.RequestHandler):
             })
         except Exception as e:
             self.set_status(500)
-            self.write(str(e))
+            #self.write(str(e))
+
+            if(not "apk" in rname):
+                self.write("发送文件完成")
+            else:
+                self.write(str(e))
+
+            #移除本地文件
 
 
 class ColdingHandler(tornado.web.RequestHandler):
@@ -345,7 +380,7 @@ async def test_asyncadb():
 
 if __name__ == '__main__':
     if os.path.getsize(os.path.join(__curdir__,
-                                    "vendor/app-uiautomator.apk")) < 1000:
+                                  "vendor/app-uiautomator.apk")) < 1000:
         sys.exit("Did you forget run\n\tgit lfs install\n\tgit lfs pull")
 
     try:
