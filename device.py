@@ -11,8 +11,8 @@ from logzero import logger
 import apkutils
 from asyncadb import adb
 from device_names import device_names
-from freeport import freeport
-from utils import current_ip
+from core.freeport import freeport
+from core.utils import current_ip
 
 
 STATUS_INIT = "init"
@@ -72,8 +72,8 @@ class AndroidDevice(object):
         sdk = d.getprop("ro.build.version.sdk")  # eg 26
         abi = d.getprop('ro.product.cpu.abi')  # eg arm64-v8a
         abis = (d.getprop('ro.product.cpu.abilist').strip() or abi).split(",")
-        #pre = d.getprop('ro.build.version.preview_sdk')  # eg 0
-        #if pre and pre != "0":
+        # pre = d.getprop('ro.build.version.preview_sdk')  # eg 0
+        # if pre and pre != "0":
         #    sdk = sdk + pre
 
         logger.debug("%s sdk: %s, abi: %s, abis: %s", self, sdk, abi, abis)
@@ -102,7 +102,7 @@ class AndroidDevice(object):
                        zipfile_path="vendor/atx-agent-latest.zip")
 
     def _push_stf(self, path: str, dest: str, mode=0o755,
-                  zipfile_path: str ="vendor/stf-binaries-master.zip"):
+                  zipfile_path: str = "vendor/stf-binaries-master.zip"):
         """ push minicap and minitouch from zip """
         with zipfile.ZipFile(zipfile_path) as z:
             if path not in z.namelist():

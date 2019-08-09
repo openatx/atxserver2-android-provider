@@ -124,7 +124,7 @@ _Android设备上线_
     "atxAgentAddress": "10.0.0.1:7912",
     "remoteConnectAddress": "10.0.0.1:5555",
     "whatsInputAddress": "10.0.0.2:9955"
-  } 
+  }
 }
 ```
 
