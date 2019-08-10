@@ -8,9 +8,10 @@ import zipfile
 import humanize
 import requests
 from logzero import logger
-from uiautomator2.version import __atx_agent_version__
+from uiautomator2.version import __atx_agent_version__, __apk_version__
 
-__all__ = ["get_atx_agent_bundle"]
+__all__ = ["get_atx_agent_bundle",
+           "get_uiautomator_apks", "get_whatsinput_apk"]
 
 
 def get_atx_agent_bundle() -> str:
@@ -23,6 +24,26 @@ def get_atx_agent_bundle() -> str:
         os.makedirs("vendor", exist_ok=True)
         create_atx_agent_bundle(version, target_zip)
     return target_zip
+
+
+def get_uiautomator_apks() -> tuple:
+    version = __apk_version__
+    apk_url = "https://github.com/openatx/android-uiautomator-server/releases/download/{}/app-uiautomator.apk".format(
+        version)
+    target_dir = f"vendor/app-uiautomator-{version}"
+    apk_path = mirror_download(apk_url, os.path.join(
+        target_dir, "app-uiautomator.apk"))
+
+    apk_test_url = "https://github.com/openatx/android-uiautomator-server/releases/download/{}/app-uiautomator-test.apk".format(
+        version)
+    apk_test_path = mirror_download(apk_test_url, os.path.join(
+        target_dir, "app-uiautomator-test.apk"))
+    return (apk_path, apk_test_path)
+
+
+def get_whatsinput_apk() -> str:
+    # TODO: store whatsinput in github
+    return "vendor/app-WhatsInput_v1.0_apkpure.com.apk"
 
 
 def create_atx_agent_bundle(version: str, target_zip: str):
@@ -54,6 +75,8 @@ def create_atx_agent_bundle(version: str, target_zip: str):
 
 
 def mirror_download(url: str, target: str):
+    if os.path.exists(target):
+        return
     github_host = "https://github.com"
     if url.startswith(github_host):
         mirror_url = "http://tool.appetizer.io" + url[len(
@@ -67,6 +90,9 @@ def mirror_download(url: str, target: str):
 
 
 def download(url: str, storepath: str):
+    target_dir = os.path.dirname(storepath) or "."
+    os.makedirs(target_dir, exist_ok=True)
+
     r = requests.get(url, stream=True)
     r.raise_for_status()
     total_size = int(r.headers.get("Content-Length"))

@@ -344,8 +344,9 @@ async def test_asyncadb():
 
 
 def init_vendor():
-    from core.fetching import get_atx_agent_bundle
+    from core.fetching import get_atx_agent_bundle, get_uiautomator_apks
     get_atx_agent_bundle()
+    get_uiautomator_apks()
 
 
 if __name__ == '__main__':
