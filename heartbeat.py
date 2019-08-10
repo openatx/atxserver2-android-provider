@@ -14,15 +14,15 @@ from tornado.queues import Queue
 from tornado import websocket
 from tornado import gen
 
-from utils import update_recursive, current_ip
+from core.utils import update_recursive, current_ip
 
 
 async def heartbeat_connect(
         server_url: str,
-        self_url: str="",
-        secret: str="",
-        platform: str="android",
-        priority: int=2,
+        self_url: str = "",
+        secret: str = "",
+        platform: str = "android",
+        priority: int = 2,
         **kwargs):
     addr = server_url.replace("http://", "").replace("/", "")
     url = "ws://" + addr + "/websocket/heartbeat"

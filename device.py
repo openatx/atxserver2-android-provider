@@ -11,8 +11,9 @@ from logzero import logger
 import apkutils
 from asyncadb import adb
 from device_names import device_names
-from freeport import freeport
-from utils import current_ip
+from core.freeport import freeport
+from core.utils import current_ip
+from core import fetching
 
 
 STATUS_INIT = "init"
@@ -67,6 +68,7 @@ class AndroidDevice(object):
         await adb.shell(self._serial, "am start -n com.github.uiautomator/.IdentifyActivity -e theme black")
 
     def _init_binaries(self):
+
         # minitouch, minicap, minicap.so
         d = self._device
         sdk = d.getprop("ro.build.version.sdk")  # eg 26
@@ -98,8 +100,9 @@ class AndroidDevice(object):
         if not okfiles:
             raise InitError("no avaliable abilist", abis)
         logger.debug("%s use atx-agent: %s", self, okfiles[0])
+        zipfile_path = fetching.get_atx_agent_bundle()
         self._push_stf(okfiles[0], "/data/local/tmp/atx-agent",
-                       zipfile_path="vendor/atx-agent-latest.zip")
+                       zipfile_path=zipfile_path)
 
     def _push_stf(self, path: str, dest: str, mode=0o755,
                   zipfile_path: str = "vendor/stf-binaries-master.zip"):
@@ -118,8 +121,10 @@ class AndroidDevice(object):
 
     def _init_apks(self):
         self._install_apk("vendor/WhatsInput_v1.0_apkpure.com.apk")
-        self._install_apk("vendor/app-uiautomator.apk")
-        self._install_apk("vendor/app-uiautomator-test.apk")
+        for apk_path in fetching.get_uiautomator_apks():
+            self._install_apk(apk_path)
+        # self._install_apk("vendor/app-uiautomator.apk")
+        # self._install_apk("vendor/app-uiautomator-test.apk")
 
     def _install_apk(self, path: str):
         try:
