@@ -121,5 +121,7 @@ cache-*
 node_modules/
 package-lock.json
 
+vendor/*.apk
 vendor/*.zip
 vendor/*.part
+vendor/app-uiautomator-*

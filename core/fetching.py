@@ -42,8 +42,10 @@ def get_uiautomator_apks() -> tuple:
 
 
 def get_whatsinput_apk() -> str:
-    # TODO: store whatsinput in github
-    return "vendor/app-WhatsInput_v1.0_apkpure.com.apk"
+    target_path = "vendor/whatsinput-v1.0.apk"
+    mirror_download(
+        "https://github.com/openatx/atxserver2-android-provider/releases/download/v0.2.0/WhatsInput_v1.0.apk", target_path)
+    return target_path
 
 
 def create_atx_agent_bundle(version: str, target_zip: str):

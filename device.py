@@ -120,11 +120,10 @@ class AndroidDevice(object):
                 self._device.sync.push(f, dest, mode)
 
     def _init_apks(self):
-        self._install_apk("vendor/WhatsInput_v1.0_apkpure.com.apk")
+        whatsinput_apk_path = get_whatsinput_apk()
+        self._install_apk(whatsinput_apk_path)
         for apk_path in fetching.get_uiautomator_apks():
             self._install_apk(apk_path)
-        # self._install_apk("vendor/app-uiautomator.apk")
-        # self._install_apk("vendor/app-uiautomator-test.apk")
 
     def _install_apk(self, path: str):
         try:
