@@ -28,5 +28,5 @@ if ! test -d /root/.android
 then
     mkdir -m 0750 /root/.android
 fi
-cp vendor/multios-adbs/keys/adbkey /root/.android/adbkey
-cp vendor/multios-adbs/keys/adbkey.pub /root/.android/adbkey.pub
+cp vendor/keys/adbkey /root/.android/adbkey
+cp vendor/keys/adbkey.pub /root/.android/adbkey.pub
