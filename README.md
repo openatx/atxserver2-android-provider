@@ -23,27 +23,15 @@ docker run --rm --privileged -v /dev/bus/usb:/dev/bus/usb --net host \
 ```
 
 ## Install from source (Mac, Windows推荐)
-依赖 `Python3.6+`, `NodeJS 8`, `Git-LFS`
+依赖 `Python3.6+`, `NodeJS 8`
 
 **NodeJS**版本太高了也不行，一定要NodeJS 8，推荐使用[nvm](https://github.com/nvm-sh/nvm)管理node版本
-
-Install git-lfs
-
-```bash
-# Mac
-brew install git-lfs
-
-# Windows
-# See https://git-lfs.github.com/
-```
 
 Clone代码到本地
 
 ```bash
 git clone https://github.com/openatx/atxserver2-android-provider
 cd atxserver2-android-provider
-git lfs install
-git lfs pull
 
 # 安装依赖
 npm install
