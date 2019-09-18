@@ -48,6 +48,24 @@ def get_whatsinput_apk() -> str:
     return target_path
 
 
+def get_stf_binaries() -> str:
+    """
+    Download from https://github.com/openatx/stf-binaries
+
+    Tag 0.2, support to Android P
+    """
+    target_path = "vendor/stf-binaries-0.2.zip"
+    mirror_download("https://github.com/openatx/stf-binaries/archive/0.2.zip", target_path)
+    return target_path
+
+
+def get_all():
+    get_atx_agent_bundle()
+    get_uiautomator_apks()
+    get_whatsinput_apk()
+    get_stf_binaries()
+    
+
 def create_atx_agent_bundle(version: str, target_zip: str):
     print(">>> Bundle atx-agent verison:", version)
     if not target_zip:
@@ -97,7 +115,7 @@ def download(url: str, storepath: str):
 
     r = requests.get(url, stream=True)
     r.raise_for_status()
-    total_size = int(r.headers.get("Content-Length"))
+    total_size = int(r.headers.get("Content-Length", "-1"))
     bytes_so_far = 0
     prefix = "Downloading %s" % os.path.basename(url)
     chunk_length = 16 * 1024

@@ -35,6 +35,7 @@ from asyncadb import adb
 from device import STATUS_FAIL, STATUS_INIT, STATUS_OKAY, AndroidDevice
 from heartbeat import heartbeat_connect
 from core.utils import current_ip, fix_url, id_generator, update_recursive
+from core import fetching
 
 __curdir__ = os.path.dirname(os.path.abspath(__file__))
 hbconn = None
@@ -343,20 +344,13 @@ async def test_asyncadb():
         print(f)
 
 
-def init_vendor():
-    from core.fetching import get_atx_agent_bundle, get_uiautomator_apks, get_whatsinput_apk
-    get_atx_agent_bundle()
-    get_uiautomator_apks()
-    get_whatsinput_apk()
-
-
 if __name__ == '__main__':
     # if os.path.getsize(os.path.join(__curdir__,
     #                                 "vendor/app-uiautomator.apk")) < 1000:
     #     sys.exit("Did you forget run\n\tgit lfs install\n\tgit lfs pull")
 
     try:
-        init_vendor()
+        fetching.get_all()
         IOLoop.current().run_sync(async_main)
     except KeyboardInterrupt:
         logger.info("Interrupt catched")

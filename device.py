@@ -15,7 +15,6 @@ from core.freeport import freeport
 from core.utils import current_ip
 from core import fetching
 
-
 STATUS_INIT = "init"
 STATUS_OKAY = "ready"
 STATUS_FAIL = "fail"
@@ -38,7 +37,7 @@ class AndroidDevice(object):
         self._callback = callback
 
     def __repr__(self):
-        return "["+self._serial+"]"
+        return "[" + self._serial + "]"
 
     @property
     def serial(self):
@@ -61,14 +60,18 @@ class AndroidDevice(object):
         self._init_apks()
         await self._init_forwards()
 
-        await adb.shell(self._serial, "/data/local/tmp/atx-agent server --stop")
-        await adb.shell(self._serial, "/data/local/tmp/atx-agent server --nouia -d")
+        await adb.shell(self._serial,
+                        "/data/local/tmp/atx-agent server --stop")
+        await adb.shell(self._serial,
+                        "/data/local/tmp/atx-agent server --nouia -d")
 
     async def open_identify(self):
-        await adb.shell(self._serial, "am start -n com.github.uiautomator/.IdentifyActivity -e theme black")
+        await adb.shell(
+            self._serial,
+            "am start -n com.github.uiautomator/.IdentifyActivity -e theme black"
+        )
 
     def _init_binaries(self):
-
         # minitouch, minicap, minicap.so
         d = self._device
         sdk = d.getprop("ro.build.version.sdk")  # eg 26
@@ -80,14 +83,20 @@ class AndroidDevice(object):
 
         logger.debug("%s sdk: %s, abi: %s, abis: %s", self, sdk, abi, abis)
 
+        stf_zippath = fetching.get_stf_binaries()
         prefix = "stf-binaries-master/node_modules/minicap-prebuilt/prebuilt/"
-        self._push_stf(prefix+abi+"/lib/android-"+sdk +
-                       "/minicap.so", "/data/local/tmp/minicap.so", 0o644)
-        self._push_stf(prefix+abi+"/bin/minicap", "/data/local/tmp/minicap")
+        self._push_stf(prefix + abi + "/lib/android-" + sdk + "/minicap.so",
+                       "/data/local/tmp/minicap.so",
+                       mode=0o644,
+                       zipfile_path=stf_zippath)
+        self._push_stf(prefix + abi + "/bin/minicap",
+                       "/data/local/tmp/minicap",
+                       zipfile_path=stf_zippath)
 
         prefix = "stf-binaries-master/node_modules/minitouch-prebuilt/prebuilt/"
-        self._push_stf(prefix+abi+"/bin/minitouch",
-                       "/data/local/tmp/minitouch")
+        self._push_stf(prefix + abi + "/bin/minitouch",
+                       "/data/local/tmp/minitouch",
+                       zipfile_path=stf_zippath)
 
         # atx-agent
         abimaps = {
@@ -101,11 +110,15 @@ class AndroidDevice(object):
             raise InitError("no avaliable abilist", abis)
         logger.debug("%s use atx-agent: %s", self, okfiles[0])
         zipfile_path = fetching.get_atx_agent_bundle()
-        self._push_stf(okfiles[0], "/data/local/tmp/atx-agent",
+        self._push_stf(okfiles[0],
+                       "/data/local/tmp/atx-agent",
                        zipfile_path=zipfile_path)
 
-    def _push_stf(self, path: str, dest: str, mode=0o755,
-                  zipfile_path: str = "vendor/stf-binaries-master.zip"):
+    def _push_stf(self,
+                  path: str,
+                  dest: str,
+                  zipfile_path: str,
+                  mode=0o755):
         """ push minicap and minitouch from zip """
         with zipfile.ZipFile(zipfile_path) as z:
             if path not in z.namelist():
@@ -129,7 +142,8 @@ class AndroidDevice(object):
         try:
             m = apkutils.APK(path).manifest
             info = self._device.package_info(m.package_name)
-            if info and m.version_code == info['version_code'] and m.version_name == info['version_name']:
+            if info and m.version_code == info[
+                    'version_code'] and m.version_name == info['version_name']:
                 logger.debug("%s already installed %s", self, path)
             else:
                 print(info, ":", m.version_code, m.version_name)
@@ -148,12 +162,15 @@ class AndroidDevice(object):
         logger.debug("%s adbkit start, port %d", self, port)
 
         self.run_background([
-            'node', 'node_modules/adbkit/bin/adbkit',
-            'usb-device-to-tcp', '-p', str(self._adb_remote_port), self._serial], silent=True)
+            'node', 'node_modules/adbkit/bin/adbkit', 'usb-device-to-tcp',
+            '-p',
+            str(self._adb_remote_port), self._serial
+        ],
+                            silent=True)
 
     def addrs(self):
         def port2addr(port):
-            return self._current_ip + ":"+str(port)
+            return self._current_ip + ":" + str(port)
 
         return {
             "atxAgentAddress": port2addr(self._atx_proxy_port),
@@ -181,12 +198,16 @@ class AndroidDevice(object):
 
     async def proxy_device_port(self, device_port: int) -> int:
         """ reverse-proxy device:port to *:port """
-        local_port = await self.adb_forward_to_any("tcp:"+str(device_port))
+        local_port = await self.adb_forward_to_any("tcp:" + str(device_port))
         listen_port = freeport.get()
-        logger.debug("%s tcpproxy.js start *:%d -> %d", self,
-                     listen_port, local_port)
-        self.run_background(['node', 'tcpproxy.js',
-                             str(listen_port), 'localhost', str(local_port)], silent=True)
+        logger.debug("%s tcpproxy.js start *:%d -> %d", self, listen_port,
+                     local_port)
+        self.run_background([
+            'node', 'tcpproxy.js',
+            str(listen_port), 'localhost',
+            str(local_port)
+        ],
+                            silent=True)
         return listen_port
 
     def run_background(self, *args, **kwargs):
@@ -199,7 +220,7 @@ class AndroidDevice(object):
         return p
 
     async def getprop(self, name: str) -> str:
-        value = await adb.shell(self._serial, "getprop "+name)
+        value = await adb.shell(self._serial, "getprop " + name)
         return value.strip()
 
     async def properties(self):
