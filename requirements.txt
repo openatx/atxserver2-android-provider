@@ -1,6 +1,7 @@
 logzero==1.5.*
-adbutils>=0.3.4,<0.4
+adbutils~=0.5
 tornado
 requests
-apkutils-patch>=0.5.4,<0.6
-# uiautomator2==0.2.*
+#apkutils-patch>=0.5.4,<0.6
+apkutils2
+uiautomator2~=1.2

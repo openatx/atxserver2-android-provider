@@ -1,6 +1,7 @@
 # coding: utf-8
 #
 
+import os
 import subprocess
 import traceback
 import zipfile
@@ -8,7 +9,7 @@ import zipfile
 from adbutils import adb as adbclient
 from logzero import logger
 
-import apkutils
+import apkutils2 as apkutils
 from asyncadb import adb
 from device_names import device_names
 from core.freeport import freeport
@@ -84,7 +85,8 @@ class AndroidDevice(object):
         logger.debug("%s sdk: %s, abi: %s, abis: %s", self, sdk, abi, abis)
 
         stf_zippath = fetching.get_stf_binaries()
-        prefix = "stf-binaries-master/node_modules/minicap-prebuilt/prebuilt/"
+        zip_folder, _ = os.path.splitext(os.path.basename(stf_zippath))
+        prefix = zip_folder + "/node_modules/minicap-prebuilt/prebuilt/"
         self._push_stf(prefix + abi + "/lib/android-" + sdk + "/minicap.so",
                        "/data/local/tmp/minicap.so",
                        mode=0o644,
@@ -93,7 +95,7 @@ class AndroidDevice(object):
                        "/data/local/tmp/minicap",
                        zipfile_path=stf_zippath)
 
-        prefix = "stf-binaries-master/node_modules/minitouch-prebuilt/prebuilt/"
+        prefix = zip_folder + "/node_modules/minitouch-prebuilt/prebuilt/"
         self._push_stf(prefix + abi + "/bin/minitouch",
                        "/data/local/tmp/minitouch",
                        zipfile_path=stf_zippath)
@@ -133,12 +135,14 @@ class AndroidDevice(object):
                 self._device.sync.push(f, dest, mode)
 
     def _init_apks(self):
-        whatsinput_apk_path = get_whatsinput_apk()
+        whatsinput_apk_path = fetching.get_whatsinput_apk()
         self._install_apk(whatsinput_apk_path)
         for apk_path in fetching.get_uiautomator_apks():
+            print("APKPath:", apk_path)
             self._install_apk(apk_path)
 
     def _install_apk(self, path: str):
+        assert path, "Invalid %s" % path
         try:
             m = apkutils.APK(path).manifest
             info = self._device.package_info(m.package_name)

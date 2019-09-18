@@ -42,7 +42,7 @@ def get_uiautomator_apks() -> tuple:
 
 
 def get_whatsinput_apk() -> str:
-    target_path = "vendor/whatsinput-v1.0.apk"
+    target_path = "vendor/WhatsInput-1.0.apk"
     mirror_download(
         "https://github.com/openatx/atxserver2-android-provider/releases/download/v0.2.0/WhatsInput_v1.0.apk", target_path)
     return target_path
@@ -94,9 +94,13 @@ def create_atx_agent_bundle(version: str, target_zip: str):
         print(">>> Zip created", target_zip)
 
 
-def mirror_download(url: str, target: str):
+def mirror_download(url: str, target: str) -> str:
+    """
+    Returns:
+        target path
+    """
     if os.path.exists(target):
-        return
+        return target
     github_host = "https://github.com"
     if url.startswith(github_host):
         mirror_url = "http://tool.appetizer.io" + url[len(

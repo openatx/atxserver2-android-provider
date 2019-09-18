@@ -19,7 +19,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 
-import apkutils
+import apkutils2 as apkutils
 import requests
 import tornado.web
 from logzero import logger
