@@ -36,12 +36,6 @@ case "$(uname -m)" in
         ;;
 esac
 
-if ! which wget
-then
-	sudo apt-get install -y wget
-fi
-
-
 wget "https://github.com/openatx/adb-binaries/raw/master/1.0.40/$TAG/adb" -O /usr/local/bin/adb-tmp
 
 chmod +x /usr/local/bin/adb-tmp
