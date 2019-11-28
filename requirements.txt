@@ -4,4 +4,4 @@ tornado
 requests
 #apkutils-patch>=0.5.4,<0.6
 apkutils2
-uiautomator2~=1.2
+uiautomator2>2.0
