@@ -54,8 +54,9 @@ def get_stf_binaries() -> str:
 
     Tag 0.2, support to Android P
     """
-    target_path = "vendor/stf-binaries-0.2.zip"
-    mirror_download("https://github.com/openatx/stf-binaries/archive/0.2.zip", target_path)
+    version = "0.2.1"
+    target_path = f"vendor/stf-binaries-{version}.zip"
+    mirror_download(f"https://github.com/openatx/stf-binaries/archive/{version}.zip", target_path)
     return target_path
 
 
@@ -121,7 +122,7 @@ def download(url: str, storepath: str):
     r.raise_for_status()
     total_size = int(r.headers.get("Content-Length", "-1"))
     bytes_so_far = 0
-    prefix = "Downloading %s" % os.path.basename(url)
+    prefix = "Downloading %s" % os.path.basename(storepath)
     chunk_length = 16 * 1024
     with open(storepath + '.part', 'wb') as f:
         for buf in r.iter_content(chunk_length):
