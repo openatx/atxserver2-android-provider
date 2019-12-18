@@ -28,6 +28,7 @@ def get_atx_agent_bundle() -> str:
 
 def get_uiautomator_apks() -> tuple:
     version = __apk_version__
+    print(">>> app-uiautomator.apk verison:", version)
     apk_url = "https://github.com/openatx/android-uiautomator-server/releases/download/{}/app-uiautomator.apk".format(
         version)
     target_dir = f"vendor/app-uiautomator-{version}"
