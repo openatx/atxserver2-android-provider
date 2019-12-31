@@ -29,14 +29,13 @@ def get_atx_agent_bundle() -> str:
 def get_uiautomator_apks() -> tuple:
     version = __apk_version__
     print(">>> app-uiautomator.apk verison:", version)
-    apk_url = "https://github.com/openatx/android-uiautomator-server/releases/download/{}/app-uiautomator.apk".format(
-        version)
+    apk_url = f"https://github.com/openatx/android-uiautomator-server/releases/download/{version}/app-uiautomator.apk"
     target_dir = f"vendor/app-uiautomator-{version}"
     apk_path = mirror_download(apk_url, os.path.join(
         target_dir, "app-uiautomator.apk"))
 
-    apk_test_url = "https://github.com/openatx/android-uiautomator-server/releases/download/{}/app-uiautomator-test.apk".format(
-        version)
+    apk_test_url = f"https://github.com/openatx/android-uiautomator-server/releases/download/{version}/app-uiautomator-test.apk"
+    print(">>> app-uiautomator-test.apk verison:", version)
     apk_test_path = mirror_download(apk_test_url, os.path.join(
         target_dir, "app-uiautomator-test.apk"))
     return (apk_path, apk_test_path)
