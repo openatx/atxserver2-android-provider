@@ -36,6 +36,8 @@ from device import STATUS_FAIL, STATUS_INIT, STATUS_OKAY, AndroidDevice
 from heartbeat import heartbeat_connect
 from core.utils import current_ip, fix_url, id_generator, update_recursive
 from core import fetching
+import uiautomator2 as u2
+import settings
 
 __curdir__ = os.path.dirname(os.path.abspath(__file__))
 hbconn = None
@@ -277,27 +279,18 @@ async def device_watch(allow_remote: bool = False):
 async def async_main():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('-s',
-                        '--server',
-                        default='localhost:4000',
-                        help='server address')
-    parser.add_argument("--allow-remote",
-                        action="store_true",
-                        help="allow remote connect device")
-    parser.add_argument('-t',
-                        '--test',
-                        action="store_true",
-                        help="run test code")
-    parser.add_argument('-p',
-                        '--port',
-                        type=int,
-                        default=3500,
-                        help='listen port')
+    # yapf: disable
+    parser.add_argument('-s', '--server', default='localhost:4000', help='server address')
+    parser.add_argument("--allow-remote", action="store_true", help="allow remote connect device")
+    parser.add_argument('-t', '--test', action="store_true", help="run test code")
+    parser.add_argument('-p', '--port', type=int, default=3500, help='listen port')
+    parser.add_argument("--atx-agent-version", default=u2.version.__atx_agent_version__, help="set atx-agent version")
     parser.add_argument("--owner", type=str, help="provider owner email")
-    parser.add_argument("--owner-file",
-                        type=argparse.FileType("r"),
-                        help="provider owner email from file")
+    parser.add_argument("--owner-file", type=argparse.FileType("r"), help="provider owner email from file")
     args = parser.parse_args()
+    # yapf: enable
+
+    settings.atx_agent_version = args.atx_agent_version
 
     owner_email = args.owner
     if args.owner_file:
@@ -319,6 +312,8 @@ async def async_main():
     app = make_app()
     app.listen(args.port)
     logger.info("ProviderURL: %s", provider_url)
+
+    fetching.get_all()
 
     # connect to atxserver2
     global hbconn
@@ -350,7 +345,6 @@ if __name__ == '__main__':
     #     sys.exit("Did you forget run\n\tgit lfs install\n\tgit lfs pull")
 
     try:
-        fetching.get_all()
         IOLoop.current().run_sync(async_main)
     except KeyboardInterrupt:
         logger.info("Interrupt catched")
