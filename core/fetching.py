@@ -39,8 +39,8 @@ def get_uiautomator_apks() -> tuple:
 
     apk_test_url = f"https://github.com/openatx/android-uiautomator-server/releases/download/{version}/app-uiautomator-test.apk"
     print(">>> app-uiautomator-test.apk verison:", version)
-    apk_test_path = mirror_download(apk_test_url, os.path.join(
-        target_dir, "app-uiautomator-test.apk"))
+    apk_test_path = mirror_download(
+        apk_test_url, os.path.join(target_dir, "app-uiautomator-test.apk"))
     return (apk_path, apk_test_path)
 
 
@@ -116,7 +116,7 @@ def mirror_download(url: str, target: str) -> str:
             github_host):]  # mirror of github
         try:
             return download(mirror_url, target)
-        except requests.RequestException as e:
+        except (requests.RequestException, ValueError) as e:
             logger.debug("download from mirror error, use origin source")
 
     return download(url, target)
@@ -140,6 +140,8 @@ def download(url: str, storepath: str):
                   flush=True)
             f.write(buf)
         print(" [Done]")
+    if total_size != -1 and os.path.getsize(storepath + ".part") != total_size:
+        raise ValueError("download size mismatch")
     shutil.move(storepath + '.part', storepath)
 
 
