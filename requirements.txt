@@ -4,3 +4,4 @@ tornado
 requests
 apkutils2
 uiautomator2>=2.5.9
+humanize
