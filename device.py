@@ -86,7 +86,7 @@ class AndroidDevice(object):
 
         stf_zippath = fetching.get_stf_binaries()
         zip_folder, _ = os.path.splitext(os.path.basename(stf_zippath))
-        prefix = zip_folder + "/node_modules/minicap-prebuilt/prebuilt/"
+        prefix = zip_folder + "/node_modules/@devicefarmer/minicap-prebuilt/prebuilt/"
         self._push_stf(prefix + abi + "/lib/android-" + sdk + "/minicap.so",
                        "/data/local/tmp/minicap.so",
                        mode=0o644,

@@ -57,8 +57,9 @@ def get_stf_binaries() -> str:
     Download from https://github.com/openatx/stf-binaries
 
     Tag 0.2, support to Android P
+    Tag 0.3.0 use stf/@devicefarmer
     """
-    version = "0.2.1"
+    version = "0.3.0"
     target_path = f"vendor/stf-binaries-{version}.zip"
     mirror_download(
         f"https://github.com/openatx/stf-binaries/archive/{version}.zip",
