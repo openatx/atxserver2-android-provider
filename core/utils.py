@@ -6,14 +6,19 @@ import random
 import re
 import socket
 import string
+import settings
+
 
 
 def current_ip():
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.connect(("8.8.8.8", 80))
-    ip = s.getsockname()[0]
-    s.close()
-    return ip
+    if settings.custom_agent_ip != "none":
+        return settings.custom_agent_ip
+    else:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
 
 
 def update_recursive(d: dict, u: dict) -> dict:

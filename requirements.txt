@@ -1,7 +1,7 @@
 logzero==1.5.*
-adbutils>=0.8.1,<1.0
+adbutils==2.8.5
 tornado
 requests
 apkutils2
-uiautomator2>=2.5.9
+uiautomator2==2.16.26
 humanize

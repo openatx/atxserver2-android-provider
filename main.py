@@ -287,10 +287,12 @@ async def async_main():
     parser.add_argument("--atx-agent-version", default=u2.version.__atx_agent_version__, help="set atx-agent version")
     parser.add_argument("--owner", type=str, help="provider owner email")
     parser.add_argument("--owner-file", type=argparse.FileType("r"), help="provider owner email from file")
+    parser.add_argument("--custom-agent-ip", default='none', help="custom agent ip address")
     args = parser.parse_args()
     # yapf: enable
 
     settings.atx_agent_version = args.atx_agent_version
+    settings.custom_agent_ip = args.custom_agent_ip
 
     owner_email = args.owner
     if args.owner_file:
@@ -306,6 +308,7 @@ async def async_main():
             ret = app_install_local("6EB0217704000486", apk_path, launch=True)
             logger.info("Ret: %s", ret)
         return
+
 
     # start local server
     provider_url = "http://" + current_ip() + ":" + str(args.port)

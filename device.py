@@ -86,7 +86,7 @@ class AndroidDevice(object):
 
         stf_zippath = fetching.get_stf_binaries()
         zip_folder, _ = os.path.splitext(os.path.basename(stf_zippath))
-        prefix = zip_folder + "/node_modules/@devicefarmer/minicap-prebuilt/prebuilt/"
+        prefix = zip_folder + "/node_modules/minicap-prebuilt/prebuilt/"
         self._push_stf(prefix + abi + "/lib/android-" + sdk + "/minicap.so",
                        "/data/local/tmp/minicap.so",
                        mode=0o644,
@@ -146,13 +146,17 @@ class AndroidDevice(object):
         try:
             m = apkutils.APK(path).manifest
             info = self._device.package_info(m.package_name)
-            if info and m.version_code == info[
-                    'version_code'] and m.version_name == info['version_name']:
+            if info and str(m.version_code) == str(info[
+                    'version_code']) and m.version_name == info['version_name']:
                 logger.debug("%s already installed %s", self, path)
+            elif info and info['version_name'] == None :
+                logger.debug(f"{info}, : {m.version_code}, {m.version_name}")
+                logger.debug("Unable to get apk version,skip to install")
+                return 
             else:
-                print(info, ":", m.version_code, m.version_name)
+                logger.debug(f"{info}, : {m.version_code}, {m.version_name}")
                 logger.debug("%s install %s", self, path)
-                self._device.install(path, force=True)
+                self._device.install(path)
         except Exception as e:
             traceback.print_exc()
             logger.warning("%s Install apk %s error %s", self, path, e)

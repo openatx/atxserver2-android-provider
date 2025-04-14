@@ -1,4 +1,4 @@
-FROM python:3
+FROM python:3.8.10
 
 RUN curl -sL https://deb.nodesource.com/setup_11.x | bash -
 RUN apt-get install -y nodejs wget
