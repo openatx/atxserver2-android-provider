@@ -5,10 +5,9 @@ import tarfile
 import tempfile
 import zipfile
 
-import humanize
 import requests
 from logzero import logger
-from uiautomator2.version import __apk_version__, __atx_agent_version__
+from uiautomator2.version import __apk_version__
 
 import settings
 
@@ -59,7 +58,7 @@ def get_stf_binaries() -> str:
     Tag 0.2, support to Android P
     Tag 0.3.0 use stf/@devicefarmer
     """
-    version = "0.3.0"
+    version = "0.3.2"
     target_path = f"vendor/stf-binaries-{version}.zip"
     mirror_download(
         f"https://github.com/openatx/stf-binaries/archive/{version}.zip",
@@ -117,7 +116,7 @@ def mirror_download(url: str, target: str) -> str:
             github_host):]  # mirror of github
         try:
             return download(mirror_url, target)
-        except (requests.RequestException, ValueError) as e:
+        except (requests.RequestException, ValueError):
             logger.debug("download from mirror error, use origin source")
 
     return download(url, target)

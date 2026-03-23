@@ -34,7 +34,7 @@ def mirror_download(url: str, target: str):
             github_host):]  # mirror of github
         try:
             return download(mirror_url, target)
-        except requests.RequestException as e:
+        except requests.RequestException:
             logger.debug("download from mirror error, use origin source")
 
     return download(url, target)

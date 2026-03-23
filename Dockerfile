@@ -1,4 +1,4 @@
-FROM python:3
+FROM python:3.9
 
 RUN curl -sL https://deb.nodesource.com/setup_11.x | bash -
 RUN apt-get install -y nodejs wget
@@ -9,7 +9,7 @@ WORKDIR /app
 RUN sh install-adb.sh
 
 RUN npm install
-RUN pip install -r requirements.txt
+RUN pip install uv && uv sync
 
 ENTRYPOINT []
-CMD ["python", "main.py", "--server", "http://localhost:4000"]
+CMD ["uv", "run", "main.py", "--server", "http://localhost:4000"]

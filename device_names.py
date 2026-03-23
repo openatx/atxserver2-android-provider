@@ -368,7 +368,6 @@ device_names = {
     "MI MAX": "小米 MAX",
     "MI MAX 2": "小米 MAX 2",
     "MI MAX 3": "小米 Max 3",
-    "MI MAX": "小米 Max",
     "Mi Note 2": "小米 Note 2",
     "Mi Note 3": "小米 Note 3",
     "MI NOTE LTE": "小米 Note",

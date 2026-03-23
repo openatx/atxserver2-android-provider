@@ -1,0 +1,100 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      adbkit:
+        specifier: ^2.11.1
+        version: 2.11.1
+      commander:
+        specifier: ^2.19.0
+        version: 2.20.3
+
+packages:
+
+  adbkit-logcat@1.1.0:
+    resolution: {integrity: sha512-57iYRLdjmhI1fnc890KyflzWpnIb/aq5ET3fbn3axdyyeyKeP4Ji/GhnfBNguG1Tw7SQRL2eBnA+hvbwIsTtNg==}
+    engines: {node: '>= 0.10.4'}
+
+  adbkit-monkey@1.0.1:
+    resolution: {integrity: sha512-uU8p+p4sv7gLsjO/At4iPufoPD3R16kVbzDVecdIerR9RzhEK6PcyAJghdOXwrYKbhm7SmPQWsxVRloDBMINDA==}
+    engines: {node: '>= 0.10.4'}
+
+  adbkit@2.11.1:
+    resolution: {integrity: sha512-hDTiRg9NX3HQt7WoDAPCplUpvzr4ZzQa2lq7BdTTJ/iOZ6O7YNAs6UYD8sFAiBEcYHDRIyq3cm9sZP6uZnhvXw==}
+    engines: {node: '>= 0.10.4'}
+    hasBin: true
+
+  async@0.2.10:
+    resolution: {integrity: sha512-eAkdoKxU6/LkKDBzLpT+t6Ff5EtfSF4wx1WfJiPEEV7WNLnDaRXk0oVysiEPm262roaachGexwUv94WhSgN5TQ==}
+
+  bluebird@2.9.34:
+    resolution: {integrity: sha512-ZDzCb87X7/IP1uzQ5eJZB+WoQRGTnKL5DHWvPw6kkMbQseouiQIrEi3P1UGE0D1k0N5/+aP/5GMCyHZ1xYJyHQ==}
+
+  commander@2.20.3:
+    resolution: {integrity: sha512-GpVkmM8vF2vQUkj2LvZmD35JxeJOLCwJ9cUkugyk2nuhbv3+mJvpLYYt+0+USMxE+oj+ey/lJEnhZw75x/OMcQ==}
+
+  debug@2.6.9:
+    resolution: {integrity: sha512-bC7ElrdJaJnPbAP+1EotYvqZsb3ecl5wi6Bfi6BJTUcNowp6cvspg0jXznRTKDjm/E7AdgFBVeAPVMNcKGsHMA==}
+    peerDependencies:
+      supports-color: '*'
+    peerDependenciesMeta:
+      supports-color:
+        optional: true
+
+  ms@2.0.0:
+    resolution: {integrity: sha512-Tpp60P6IUJDTuOq/5Z8cdskzJujfwqfOTkrwIwj7IRISpnkJnT6SyJ4PCPnGMoFjC9ddhal5KVIYtAt97ix05A==}
+
+  node-forge@0.7.6:
+    resolution: {integrity: sha512-sol30LUpz1jQFBjOKwbjxijiE3b6pjd74YwfD0fJOKPjF+fONKb2Yg8rYgS6+bK6VDl+/wfr4IYpC7jDzLUIfw==}
+
+  split@0.3.3:
+    resolution: {integrity: sha512-wD2AeVmxXRBoX44wAycgjVpMhvbwdI2aZjCkvfNcH1YqHQvJVa1duWc73OyVGJUc05fhFaTZeQ/PYsrmyH0JVA==}
+
+  through@2.3.8:
+    resolution: {integrity: sha512-w89qg7PI8wAdvX60bMDP+bFoD5Dvhm9oLheFp5O4a2QF0cSBGsBX4qZmadPMvVqlLJBBci+WqGGOAPvcDeNSVg==}
+
+snapshots:
+
+  adbkit-logcat@1.1.0: {}
+
+  adbkit-monkey@1.0.1:
+    dependencies:
+      async: 0.2.10
+
+  adbkit@2.11.1:
+    dependencies:
+      adbkit-logcat: 1.1.0
+      adbkit-monkey: 1.0.1
+      bluebird: 2.9.34
+      commander: 2.20.3
+      debug: 2.6.9
+      node-forge: 0.7.6
+      split: 0.3.3
+    transitivePeerDependencies:
+      - supports-color
+
+  async@0.2.10: {}
+
+  bluebird@2.9.34: {}
+
+  commander@2.20.3: {}
+
+  debug@2.6.9:
+    dependencies:
+      ms: 2.0.0
+
+  ms@2.0.0: {}
+
+  node-forge@0.7.6: {}
+
+  split@0.3.3:
+    dependencies:
+      through: 2.3.8
+
+  through@2.3.8: {}

@@ -5,7 +5,6 @@
 
 
 import json
-import re
 from collections import defaultdict
 
 from logzero import logger
@@ -14,7 +13,7 @@ from tornado.queues import Queue
 from tornado import websocket
 from tornado import gen
 
-from core.utils import update_recursive, current_ip
+from core.utils import update_recursive
 
 
 async def heartbeat_connect(

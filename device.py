@@ -152,7 +152,7 @@ class AndroidDevice(object):
             else:
                 print(info, ":", m.version_code, m.version_name)
                 logger.debug("%s install %s", self, path)
-                self._device.install(path, force=True)
+                self._device.install(path)
         except Exception as e:
             traceback.print_exc()
             logger.warning("%s Install apk %s error %s", self, path, e)

@@ -3,18 +3,11 @@
 #
 
 import argparse
-import collections
 import glob
 import hashlib
-import json
 import os
-import pprint
 import re
 import shutil
-import socket
-import subprocess
-import sys
-import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
@@ -23,18 +16,15 @@ import apkutils2 as apkutils
 import requests
 import tornado.web
 from logzero import logger
-from tornado import gen, websocket
 from tornado.concurrent import run_on_executor
 from tornado.ioloop import IOLoop
-from tornado.web import RequestHandler
-from tornado.websocket import WebSocketHandler, websocket_connect
 
 import adbutils
 from adbutils import adb as adbclient
 from asyncadb import adb
-from device import STATUS_FAIL, STATUS_INIT, STATUS_OKAY, AndroidDevice
+from device import STATUS_OKAY, AndroidDevice
 from heartbeat import heartbeat_connect
-from core.utils import current_ip, fix_url, id_generator, update_recursive
+from core.utils import current_ip, id_generator
 from core import fetching
 import uiautomator2 as u2
 import settings
@@ -103,7 +93,7 @@ def app_install_local(serial: str, apk_path: str, launch: bool = False) -> str:
         logger.debug("install-remote %s", dst)
         # 调用pm install安装
         device.install_remote(dst)
-    except adbutils.errors.AdbInstallError as e:
+    except adbutils.AdbInstallError as e:
         raise InstallError("install", e.output)
     # finally:
     # 停止uiautomator2服务

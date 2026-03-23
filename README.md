@@ -23,28 +23,19 @@ docker run --rm --privileged -v /dev/bus/usb:/dev/bus/usb --net host \
 ```
 
 ## Install from source (Mac, Windows推荐)
-依赖 `Python3.6+`, `NodeJS 8`
 
-**NodeJS**版本太高了也不行，一定要NodeJS 8，推荐使用[nvm](https://github.com/nvm-sh/nvm)管理node版本
-
-Clone代码到本地
-
-```bash
+```sh
 git clone https://github.com/openatx/atxserver2-android-provider
 cd atxserver2-android-provider
 
-# 安装依赖
-npm install
+pip install uv
+npm install -g pnpm
 
-# 准备Python虚拟环境（可选）
-python3 -m venv venv
-. venv/bin/activate
-# venv/Scripts/activate.bat  # for windows
-
-pip install -r requirements.txt
+uv sync
+pnpm install
 
 # 启动，需要指定atxserver2的地址, 假设地址为 http://localhost:4000
-python3 main.py --server localhost:4000
+uv run main.py --server localhost:4000
 ```
 
 Provider可以通过`adb track-devices`自动发现已经接入的设备，当手机接入到电脑上时，会自动给手机安装`minicap`, `minitouch`, `atx-agent`, `app-uiautomator-[test].apk`, `whatsinput-apk`
