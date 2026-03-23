@@ -11,7 +11,7 @@ dependencies = [
     "logzero==1.5.*",
     "requests>=2.32.4",
     "retry>=0.9.2",
-    "setuptools>=60.0.0,<70.0.0",
+    "setuptools>=60.0.0,<79.0.0",
     "tornado>=6.4.2",
     "uiautomator2<3",
 ]
